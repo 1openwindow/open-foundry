@@ -23,7 +23,8 @@ RUN apt-get update \
 
 USER node
 WORKDIR /app
-COPY --chown=node:node package.json ./
+COPY --chown=node:node package.json package-lock.json ./
+RUN npm ci --omit=dev
 COPY --chown=node:node src ./src
 COPY --chown=node:node .agents/skills /workspace/.agents/skills
 COPY --chown=node:node demo-workspace /workspace

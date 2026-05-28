@@ -6,8 +6,8 @@ protocols:
     version: 1.0.0
 image: zihchpifoundry.azurecr.io/pi-foundry:latest
 resources:
-  cpu: "1"
-  memory: 2Gi
+  cpu: "2"
+  memory: 4Gi
 environment_variables:
   - name: PI_ARGS
     value: ${PI_ARGS}
@@ -23,3 +23,13 @@ environment_variables:
     value: ${PI_OPENAI_BASE_URL}
   - name: PI_OPENAI_MODEL
     value: ${PI_OPENAI_MODEL}
+  - name: ARTIFACT_PUBLISH_MODE
+    value: ${ARTIFACT_PUBLISH_MODE}
+  - name: ARTIFACT_STORAGE_ACCOUNT
+    value: ${ARTIFACT_STORAGE_ACCOUNT}
+  - name: ARTIFACT_STATIC_WEB_ENDPOINT
+    value: ${ARTIFACT_STATIC_WEB_ENDPOINT}
+  - name: ARTIFACT_STATIC_WEB_CONTAINER
+    value: ${ARTIFACT_STATIC_WEB_CONTAINER}
+  - name: ARTIFACT_BLOB_PREFIX
+    value: ${ARTIFACT_BLOB_PREFIX}

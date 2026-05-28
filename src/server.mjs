@@ -1,9 +1,11 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import { extname, resolve, sep } from "node:path";
+import { basename, extname, posix, relative, resolve, sep } from "node:path";
+import { DefaultAzureCredential } from "@azure/identity";
+import { BlobServiceClient } from "@azure/storage-blob";
 
 const port = Number.parseInt(process.env.PORT ?? "8080", 10);
 const host = process.env.HOST ?? "0.0.0.0";
@@ -22,6 +24,14 @@ const foundryOpenAIBaseUrl =
   process.env.FOUNDRY_OPENAI_BASE_URL ??
   "https://zihch-test-wus3-resource.services.ai.azure.com/openai/v1";
 const foundryOpenAIModel = process.env.PI_OPENAI_MODEL ?? process.env.FOUNDRY_OPENAI_MODEL ?? "gpt-5.4-mini";
+const artifactPublishMode = process.env.ARTIFACT_PUBLISH_MODE ?? "disabled";
+const artifactStorageAccount = process.env.ARTIFACT_STORAGE_ACCOUNT;
+const artifactStaticWebEndpoint = process.env.ARTIFACT_STATIC_WEB_ENDPOINT;
+const artifactStaticWebContainer = process.env.ARTIFACT_STATIC_WEB_CONTAINER ?? "$web";
+const artifactBlobPrefix = (process.env.ARTIFACT_BLOB_PREFIX ?? "pi-foundry").replace(/^\/+|\/+$/g, "");
+const artifactMaxPublishBytes = Number.parseInt(process.env.ARTIFACT_MAX_PUBLISH_BYTES ?? "104857600", 10);
+const artifactPromptHints = process.env.ARTIFACT_PROMPT_HINTS !== "0" && process.env.ARTIFACT_PROMPT_HINTS !== "false";
+let artifactContainerClientPromise;
 
 class HttpError extends Error {
   constructor(statusCode, message, details) {
@@ -78,6 +88,12 @@ function contentTypeForPath(path) {
       return "image/svg+xml; charset=utf-8";
     case ".zip":
       return "application/zip";
+    case ".mp4":
+      return "video/mp4";
+    case ".webm":
+      return "video/webm";
+    case ".mov":
+      return "video/quicktime";
     default:
       return "application/octet-stream";
   }
@@ -212,6 +228,175 @@ async function sendArtifactFile(res, path) {
     stream.on("end", resolveStream);
     stream.pipe(res);
   });
+}
+
+function staticWebPublishingEnabled() {
+  return artifactPublishMode === "static-web" && Boolean(artifactStorageAccount && artifactStaticWebEndpoint);
+}
+
+function getArtifactContainerClient() {
+  if (!staticWebPublishingEnabled()) return undefined;
+  artifactContainerClientPromise ??= Promise.resolve().then(() => {
+    const credential = new DefaultAzureCredential({
+      managedIdentityClientId: process.env.AZURE_CLIENT_ID || undefined,
+    });
+    const serviceClient = new BlobServiceClient(`https://${artifactStorageAccount}.blob.core.windows.net`, credential);
+    return serviceClient.getContainerClient(artifactStaticWebContainer);
+  });
+  return artifactContainerClientPromise;
+}
+
+function likelyArtifactPrompt(prompt) {
+  return /\b(html|artifact|artifacts|file|files|report|mp3|mp4|video|audio|zip|download|webpage|page|presentation|slides?)\b/i.test(prompt) ||
+    /文件|网页|页面|报告|音频|视频|下载|产物|生成|汇报|演示|幻灯片|可播放|预览/.test(prompt);
+}
+
+function likelyHtmlPresentationPrompt(prompt) {
+  return /\b(html|webpage|page|report|presentation|slides?|hyperframes?)\b/i.test(prompt) ||
+    /网页|页面|报告|汇报|演示|幻灯片|可播放|预览/.test(prompt);
+}
+
+function withArtifactPromptHint(prompt, artifactDir) {
+  if (!artifactPromptHints || !likelyArtifactPrompt(prompt)) return prompt;
+  const hints = [
+    "Artifact delivery contract:",
+    `- Write all generated downloadable files under: ${artifactDir}`,
+    "- Do not write downloadable artifacts outside that directory unless the user explicitly asks.",
+    "- Use relative paths between files inside that directory, for example ./narration.mp3 from index.html.",
+    "- When finished, summarize generated file names only. Do not paste full generated file contents into chat unless asked.",
+  ];
+
+  if (likelyHtmlPresentationPrompt(prompt)) {
+    hints.push(
+      "",
+      "Browser-playable HTML report/presentation contract:",
+      "- Generate index.html as a standalone static website; do not rely on external CDN or external JavaScript.",
+      "- Generate script.md for speaker notes or narration draft.",
+      "- Generate artifact-manifest.json listing the files that should be published.",
+      "- Prefer a 1920x1080 16:9 scene-based presentation over one long scrolling page.",
+      "- Use <section class=\"scene\" data-start=\"...\" data-duration=\"...\"> for each scene.",
+      "- CSS must hide inactive scenes and show only .scene.active: .scene { opacity: 0; pointer-events: none; } .scene.active { opacity: 1; pointer-events: auto; }",
+      "- JavaScript must read data-start/data-duration and switch the active scene over time.",
+      "- Add simple play/pause, previous/next, and progress controls.",
+      "- Initial view must show scene 1, not the final scene. Do not allow all scenes to be visible at once.",
+    );
+  }
+
+  return [hints.join("\n"), "", prompt].join("\n");
+}
+
+function encodeStaticWebPath(path) {
+  return path.split("/").map(encodeURIComponent).join("/");
+}
+
+async function listArtifactFiles(root) {
+  let entries;
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return [];
+    throw error;
+  }
+
+  const files = [];
+  for (const entry of entries) {
+    const child = resolve(root, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await listArtifactFiles(child)));
+    } else if (entry.isFile()) {
+      files.push(child);
+    }
+  }
+  return files;
+}
+
+async function readArtifactManifest(root) {
+  const manifestPath = resolve(root, "artifact-manifest.json");
+  let manifest;
+  try {
+    manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return undefined;
+    log("warn", "artifact_manifest_ignored", { manifestPath, error: serializeError(error) });
+    return undefined;
+  }
+
+  if (!Array.isArray(manifest.artifacts)) return undefined;
+  return manifest.artifacts
+    .map((entry) => {
+      if (!entry || typeof entry.path !== "string") return undefined;
+      const localPath = resolve(root, entry.path);
+      if (!isInside(root, localPath)) return undefined;
+      return {
+        localPath,
+        name: typeof entry.name === "string" ? entry.name : basename(entry.path),
+        description: typeof entry.description === "string" ? entry.description : undefined,
+        contentType: typeof entry.contentType === "string" ? entry.contentType : undefined,
+      };
+    })
+    .filter(Boolean);
+}
+
+async function collectArtifactEntries(root) {
+  const manifestEntries = await readArtifactManifest(root);
+  if (manifestEntries?.length) return manifestEntries;
+  return (await listArtifactFiles(root))
+    .filter((filePath) => basename(filePath) !== "artifact-manifest.json")
+    .map((localPath) => ({ localPath, name: basename(localPath) }));
+}
+
+async function publishStaticWebArtifacts({ artifactId, artifactDir, requestId, sessionId }) {
+  if (!staticWebPublishingEnabled()) return [];
+
+  const containerClient = await getArtifactContainerClient();
+  const entries = await collectArtifactEntries(artifactDir);
+  if (!entries.length) return [];
+
+  let totalBytes = 0;
+  const artifacts = [];
+  const endpoint = artifactStaticWebEndpoint.replace(/\/+$/, "");
+  const root = resolve(artifactDir);
+
+  for (const entry of entries) {
+    const fileStat = await stat(entry.localPath);
+    if (!fileStat.isFile()) continue;
+    totalBytes += fileStat.size;
+    if (totalBytes > artifactMaxPublishBytes) {
+      throw new HttpError(413, `artifact publish size exceeds ${artifactMaxPublishBytes} bytes`);
+    }
+
+    const relativePath = relative(root, entry.localPath).split(sep).join("/");
+    const blobName = posix.join(artifactBlobPrefix, artifactId, relativePath);
+    const contentType = entry.contentType ?? contentTypeForPath(entry.localPath);
+    await containerClient.getBlockBlobClient(blobName).uploadFile(entry.localPath, {
+      blobHTTPHeaders: { blobContentType: contentType },
+    });
+
+    artifacts.push({
+      name: entry.name ?? basename(entry.localPath),
+      description: entry.description,
+      path: relativePath,
+      contentType,
+      size: fileStat.size,
+      url: `${endpoint}/${encodeStaticWebPath(blobName)}`,
+    });
+  }
+
+  log("info", "artifacts_published", {
+    requestId,
+    sessionId,
+    artifactId,
+    count: artifacts.length,
+    totalBytes,
+    mode: artifactPublishMode,
+  });
+  return artifacts;
+}
+
+function appendArtifactLinks(output, artifacts) {
+  if (!artifacts?.length) return output;
+  const links = artifacts.map((artifact) => `- [${artifact.name}](${artifact.url})`).join("\n");
+  return `${output.trimEnd()}\n\nArtifacts:\n\n${links}`;
 }
 
 function serializeError(error) {
@@ -445,29 +630,44 @@ async function handleInvocation(payload, requestId, sessionIdOverride, onTextDel
   const piSessionDir = resolve(sessionRoot, "pi-sessions");
   const cwd = resolveInvocationCwd(payload.cwd);
   const started = Date.now();
+  const artifactId = `${new Date(started).toISOString().slice(0, 10)}/${requestId}`;
+  const artifactDir = resolve(filesDir, artifactId);
 
-  await mkdir(piSessionDir, { recursive: true });
+  await Promise.all([mkdir(piSessionDir, { recursive: true }), mkdir(artifactDir, { recursive: true })]);
 
   log("info", "invocation_start", {
     requestId,
     sessionId,
     cwd,
     piSessionDir,
+    artifactDir,
     promptLength: prompt.length,
   });
 
   try {
-    const result = await runPiPrompt(prompt, { requestId, sessionId, cwd, piSessionDir, onTextDelta });
+    const effectivePrompt = withArtifactPromptHint(prompt, artifactDir);
+    const result = await runPiPrompt(effectivePrompt, { requestId, sessionId, cwd, piSessionDir, onTextDelta });
     const latencyMs = Date.now() - started;
+    let artifacts = [];
+    let output = result.text;
+    try {
+      artifacts = await publishStaticWebArtifacts({ artifactId, artifactDir, requestId, sessionId });
+      output = appendArtifactLinks(output, artifacts);
+    } catch (publishError) {
+      log("error", "artifact_publish_error", { requestId, sessionId, artifactId, error: serializeError(publishError) });
+      output = `${output.trimEnd()}\n\nArtifact publishing failed: ${publishError instanceof Error ? publishError.message : String(publishError)}`;
+    }
+
     log("info", "invocation_end", {
       requestId,
       sessionId,
       latencyMs,
-      outputLength: result.text.length,
+      outputLength: output.length,
+      artifactCount: artifacts.length,
       mock: result.mock,
       piExitCode: result.piExitCode,
     });
-    return { statusCode: 200, body: { output: result.text, sessionId: result.sessionId, mock: result.mock } };
+    return { statusCode: 200, body: { output, sessionId: result.sessionId, mock: result.mock, artifacts } };
   } catch (error) {
     const latencyMs = Date.now() - started;
     const statusCode = error instanceof HttpError ? error.statusCode : 500;
@@ -625,6 +825,13 @@ const server = createServer(async (req, res) => {
         piAgentDir,
         foundryOpenAIConfigured: Boolean(process.env.PI_OPENAI_API_KEY ?? process.env.FOUNDRY_OPENAI_API_KEY),
         foundryOpenAIModel,
+        artifactPublishing: {
+          mode: artifactPublishMode,
+          enabled: staticWebPublishingEnabled(),
+          storageAccount: artifactStorageAccount ?? null,
+          staticWebEndpoint: artifactStaticWebEndpoint ?? null,
+          blobPrefix: artifactBlobPrefix,
+        },
         diagnosticsEnabled,
       });
       return;
@@ -653,10 +860,21 @@ const server = createServer(async (req, res) => {
           connection: "keep-alive",
         });
 
+        let streamedText = "";
         const result = await handleInvocation(payload, requestId, sessionId, (delta) => {
+          streamedText += delta;
           writeSse(res, { type: "token", content: delta });
         });
-        writeSse(res, { type: "done", full_text: result.body.output, session_id: result.body.sessionId, request_id: requestId });
+        if (result.body.output.startsWith(streamedText) && result.body.output.length > streamedText.length) {
+          writeSse(res, { type: "token", content: result.body.output.slice(streamedText.length) });
+        }
+        writeSse(res, {
+          type: "done",
+          full_text: result.body.output,
+          session_id: result.body.sessionId,
+          request_id: requestId,
+          artifacts: result.body.artifacts ?? [],
+        });
         res.end();
         return;
       }

@@ -21,16 +21,19 @@ Complete:
 - Invocations protocol shape works
 - Remote real pi invocation works
 - Remote session continuity works
+- Static website artifact publishing works
 
 Current known-good remote agent:
 
 - Agent name: `pi-foundry`
-- Version: `12`
+- Version: `4`
 - Protocol: `invocations`
 - Endpoint:
-  `https://zihch-test-wus3-resource.services.ai.azure.com/api/projects/zihch-test-wus3/agents/pi-foundry/endpoint/protocols/invocations?api-version=2025-11-15-preview`
+  `https://zihch-eus2.services.ai.azure.com/api/projects/zihch-eus2/agents/pi-foundry/endpoint/protocols/invocations?api-version=2025-11-15-preview`
 - Playground:
-  `https://ai.azure.com/nextgen/r/_P-163InQSu3MAlKDcjYFQ,rg-zihch-test,,zihch-test-wus3-resource,zihch-test-wus3/build/agents/pi-foundry/build?version=12`
+  `https://ai.azure.com/nextgen/r/F1arwDVUQ0GNakZnSWLqGQ,zihch-test-eus2,,zihch-eus2,zihch-eus2/build/agents/pi-foundry/build?version=4`
+- Artifact static website:
+  `https://pifoundryeus2web.z20.web.core.windows.net/`
 
 ## Project layout
 
@@ -92,7 +95,7 @@ The wrapper removes `--no-session` from `PI_ARGS` and adds:
 
 Verified remotely:
 
-1. Ask version 12 to remember `mango`
+1. Ask version 4 to remember `mango`
 2. Ask again in same session
 3. It returns `mango`
 
@@ -214,7 +217,7 @@ Remote invocation, known-good real version:
 ```bash
 azd ai agent invoke pi-foundry \
   --protocol invocations \
-  --version 12 \
+  --version 4 \
   --new-session \
   --timeout 600 \
   'Say exactly: ok'
@@ -244,7 +247,7 @@ azd ai agent doctor --no-prompt
 
 ## Current doctor state
 
-Last checked after version 12 deployment:
+Last checked after version 4 deployment:
 
 ```text
 11 passed, 0 failed, 3 skipped, 1 warned
@@ -270,7 +273,8 @@ This is not a blocker; remote real invocation works.
 
 1. `/diagnostics` is now disabled by default. Set `ENABLE_DIAGNOSTICS=1` to enable it temporarily.
 2. `PI_OPENAI_API_KEY` is stored in local azd env. User said Key Vault is not needed yet.
-3. `/artifacts/<path>` can serve generated files from `FILES_DIR`; upload/workspace ingestion is still not implemented.
-4. No concurrency limits yet.
-5. No explicit output truncation in the HTTP wrapper, though pi tools already truncate their own tool output.
-6. Multiple old remote versions exist. Use version 12 unless newer versions are validated.
+3. `/artifacts/<path>` can serve generated files from `FILES_DIR` locally, but Foundry front door does not expose that route. Remote artifacts are published to Azure Storage Static Website instead.
+4. Upload/workspace ingestion is still not implemented.
+5. No concurrency limits yet.
+6. No explicit output truncation in the HTTP wrapper, though pi tools already truncate their own tool output.
+7. Multiple old remote versions exist. Use version 4 unless newer versions are validated.

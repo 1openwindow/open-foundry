@@ -5,12 +5,14 @@ This project deploys `pi` as a Microsoft Foundry Hosted Agent using the Invocati
 ## Current known-good deployment
 
 - Agent: `pi-foundry`
-- Version: `12`
+- Version: `4`
 - Protocol: `invocations`
 - Endpoint:
-  `https://zihch-test-wus3-resource.services.ai.azure.com/api/projects/zihch-test-wus3/agents/pi-foundry/endpoint/protocols/invocations?api-version=2025-11-15-preview`
+  `https://zihch-eus2.services.ai.azure.com/api/projects/zihch-eus2/agents/pi-foundry/endpoint/protocols/invocations?api-version=2025-11-15-preview`
 - Playground:
-  `https://ai.azure.com/nextgen/r/_P-163InQSu3MAlKDcjYFQ,rg-zihch-test,,zihch-test-wus3-resource,zihch-test-wus3/build/agents/pi-foundry/build?version=12`
+  `https://ai.azure.com/nextgen/r/F1arwDVUQ0GNakZnSWLqGQ,zihch-test-eus2,,zihch-eus2,zihch-eus2/build/agents/pi-foundry/build?version=4`
+- Artifact static website:
+  `https://pifoundryeus2web.z20.web.core.windows.net/`
 
 ## Prerequisites
 
@@ -67,13 +69,13 @@ Important environment values:
 azd env get-values | sort | rg 'AZURE_|FOUNDRY_PROJECT_ENDPOINT|PI_|ENABLE_DIAGNOSTICS|AGENT_PI_FOUNDRY_VERSION'
 ```
 
-Generated files under `FILES_DIR` are served by:
+Generated files under `FILES_DIR` are served locally by:
 
 ```text
 /artifacts/<relative-path-under-FILES_DIR>
 ```
 
-For example, `/files/coding-agent-comparison/index.html` is served at `/artifacts/coding-agent-comparison/index.html` if the Hosted Agent front door exposes non-invocation routes.
+The Foundry Hosted Agent front door does not expose that local route. For remote usage, generated artifacts are published to Azure Storage Static Website and returned as clickable links. See [docs/artifacts.md](./docs/artifacts.md).
 
 Expected real-model values:
 
@@ -169,12 +171,12 @@ azd env get-values | rg 'AGENT_PI_FOUNDRY_VERSION|AGENT_PI_FOUNDRY_INVOCATIONS_E
 
 ## Verify remote invocation
 
-Use the latest deployed version, currently known-good `12`:
+Use the latest deployed version, currently known-good `4`:
 
 ```bash
 azd ai agent invoke pi-foundry \
   --protocol invocations \
-  --version 12 \
+  --version 4 \
   --new-session \
   --timeout 600 \
   'Say exactly: ok'
@@ -212,7 +214,7 @@ Start a new session:
 ```bash
 azd ai agent invoke pi-foundry \
   --protocol invocations \
-  --version 12 \
+  --version 4 \
   --new-session \
   --timeout 600 \
   'Remember this exact word for this session: mango. Reply exactly: remembered'
@@ -223,7 +225,7 @@ Then invoke again without `--new-session`:
 ```bash
 azd ai agent invoke pi-foundry \
   --protocol invocations \
-  --version 12 \
+  --version 4 \
   --timeout 600 \
   'What exact word did I ask you to remember? Reply with only the word.'
 ```
