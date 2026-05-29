@@ -12,13 +12,15 @@ Use this skill as the UX/onboarding layer for the `pi-foundry` azd-native adapte
 - "帮我检查为什么 azd up 失败。"
 - "跑一下远程 artifact demo。"
 
-Your job is to keep the user on one path:
+Your job is to provide the natural-language UX while using `azd` as the deployment engine. The user should stay in their current repo and say the goal; you should inspect, ask for missing values, run the right `azd` commands, explain results, and recover from errors.
+
+Keep the user on one path:
 
 ```text
-existing Pi agent repo -> thin azd adapter -> runtime base image -> azd up -> Foundry Hosted Agent
+existing Pi agent repo -> azd init --template -> runtime base image -> azd up -> Foundry Hosted Agent
 ```
 
-Do **not** create a wrapper repo. Do **not** copy user assets into a separate deployment repo. Do **not** vendor pi-foundry runtime source into the user's repo.
+Do **not** ask the user to `cd` into `pi-foundry`. Do **not** introduce a separate CLI. Do **not** create a wrapper repo. Do **not** copy user assets into a separate deployment repo. Do **not** vendor pi-foundry runtime source into the user's repo.
 
 ## Mental model
 
@@ -56,7 +58,9 @@ Microsoft Foundry Hosted Agents
 
 Default recommendation:
 
-- Stay in the user's existing Pi agent repo.
+- The user stays in their existing Pi agent repo.
+- The skill is the UX layer; `azd` is the only deployment toolchain the user needs to know.
+- Initialize with `azd init --template ... . --environment <agent-name>` when `.azd/pi-foundry/` is missing.
 - Add deployment configuration only.
 - Use `node .azd/pi-foundry/doctor.mjs` for preflight validation.
 - Use `azd up` as the canonical deploy command.
@@ -73,9 +77,10 @@ Default recommendation:
    - `pwd`
    - `git status --short` when inside a git repo
    - `find . -maxdepth 3 ...` for relevant files if needed
-3. Initialize with azd from the user's repo. `azd init` warns before copying template files into a non-empty directory.
+3. If the adapter is missing, initialize with azd from the user's current repo. `azd init` warns before copying template files into a non-empty directory.
 4. Before deploy, run from the user repo:
    - `node .azd/pi-foundry/doctor.mjs`
+5. Do not merely print a long command list if the user asked you to do the work. Execute safe inspections and ask for confirmation before mutating operations.
 
 ## Core workflow: existing Pi agent -> Foundry deployment
 
@@ -97,22 +102,21 @@ Ask only for missing values:
 
 Never print secrets. Do not write secrets into repo files.
 
-### Install adapter
+### Initialize adapter with azd
 
 From the existing Pi agent repo, initialize with azd:
 
 ```bash
-cd <existing-pi-agent-path>
 azd init --template <pi-foundry-azd-template> . --environment <agent-name>
 ```
 
-For local development before the template is published as a standalone repo, use the local template path:
+For local development before the template is published as a standalone repo, use the local template path while still running from the user's repo:
 
 ```bash
 azd init --template ~/repos/pi-foundry/templates/azd-native . --environment <agent-name>
 ```
 
-`azd init` warns when the current directory is not empty and asks for confirmation before copying template files into the repo.
+`azd init` warns when the current directory is not empty and asks for confirmation before copying template files into the repo. Treat that prompt as the user's approval point.
 
 Explain clearly that this adds deployment configuration files only:
 

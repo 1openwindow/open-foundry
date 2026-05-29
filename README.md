@@ -81,7 +81,7 @@ This template includes a project skill at `.agents/skills/deploy-pi-agent-to-fou
 帮我检查为什么 artifact demo 失败。
 ```
 
-The skill acts as the UX layer for vibe-coding workflows: it identifies whether the current directory is an existing Pi agent repo or a pi-foundry development checkout; prefers dry-runs before mutating actions; defaults to the azd-native adapter path; and translates failures into concrete next steps. It does not replace the runtime/template layer.
+The skill acts as the UX layer for vibe-coding workflows while `azd` remains the deployment engine. Users stay in their existing Pi agent repo and can ask naturally, for example, “deploy this agent to Foundry.” The skill inspects the repo, initializes the adapter with `azd init --template` when needed, helps configure `azd env`, runs the adapter doctor, deploys with `azd up`, and translates failures into concrete next steps. It does not introduce a separate CLI or replace the runtime/template layer.
 
 ### Azd-native adapter quickstart
 
