@@ -22,7 +22,7 @@ PI_FOUNDRY_RUNTIME_IMAGE=pi-foundry-runtime:local npm run runtime:build
 PI_FOUNDRY_RUNTIME_IMAGE=pi-foundry-runtime:local npm run runtime:smoke
 ```
 
-The smoke test runs the runtime container with `PI_MOCK=1`, mounts `demo-workspace` as `/workspace`, checks `/readiness`, and posts a mock invocation.
+The smoke test runs the runtime container with `PI_MOCK=1`, mounts `examples/demo-agent/demo-workspace` as `/workspace`, checks `/readiness`, and posts a mock invocation.
 
 ## Build remotely with ACR
 

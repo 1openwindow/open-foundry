@@ -71,7 +71,7 @@ non-streaming JSON mode and streaming SSE mode.
 
 ## Docker image
 
-The default Dockerfile starts both processes:
+The runtime image Dockerfile starts both processes:
 
 1. Node pi-foundry backend on `127.0.0.1:18080`.
 2. Python official invocations host on public port `8088`.
@@ -80,8 +80,8 @@ Build from the repo root:
 
 ```bash
 docker build \
-  -f Dockerfile \
-  -t pi-foundry-official-invocations:local \
+  -f Dockerfile.runtime \
+  -t pi-foundry-runtime:local \
   .
 ```
 
@@ -90,7 +90,8 @@ Run in mock mode:
 ```bash
 docker run --rm -p 8088:8088 \
   -e PI_MOCK=1 \
-  pi-foundry-official-invocations:local
+  -v "$PWD/examples/demo-agent/demo-workspace:/workspace" \
+  pi-foundry-runtime:local
 ```
 
 Invoke non-streaming JSON:

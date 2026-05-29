@@ -36,8 +36,8 @@ RUN npm ci --omit=dev
 
 COPY --chown=node:node src ./src
 COPY --chown=node:node runtime ./runtime
-COPY --chown=node:node .agents/skills /workspace/.agents/skills
-COPY --chown=node:node demo-workspace /workspace
+COPY --chown=node:node examples/demo-agent/.agents/skills /workspace/.agents/skills
+COPY --chown=node:node examples/demo-agent/demo-workspace /workspace
 
 RUN chmod +x /app/runtime/official-invocations/entrypoint.sh
 

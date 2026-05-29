@@ -5,7 +5,7 @@ IMAGE_TAG="${PI_FOUNDRY_RUNTIME_IMAGE:-pi-foundry-runtime:local}"
 HOST_PORT="${HOST_PORT:-8125}"
 CONTAINER_NAME="pi-foundry-runtime-smoke-${HOST_PORT}"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-WORKSPACE="${WORKSPACE:-${ROOT_DIR}/demo-workspace}"
+WORKSPACE="${WORKSPACE:-${ROOT_DIR}/examples/demo-agent/demo-workspace}"
 
 cleanup() {
   docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true

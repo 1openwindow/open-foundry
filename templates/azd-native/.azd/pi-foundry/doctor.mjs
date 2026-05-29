@@ -48,6 +48,7 @@ async function main() {
     "azure.yaml",
     "agent.yaml",
     "agent.manifest.yaml",
+    "agent.config.example.yaml",
     ".dockerignore",
     ".azd/pi-foundry/Dockerfile",
     ".azd/pi-foundry/README.md",

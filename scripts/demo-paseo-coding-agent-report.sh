@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PROMPT_FILE="${1:-$ROOT/demo-workspace/prompts/coding-agent-report.zh.md}"
+PROMPT_FILE="${1:-$ROOT/examples/demo-agent/demo-workspace/prompts/coding-agent-report.zh.md}"
 PROVIDER="${PASEO_PROVIDER:-foundry-pi}"
 MODEL="${PASEO_MODEL:-gpt-5.4}"
 

@@ -82,7 +82,7 @@ Foundry /invocations
 Files:
 
 ```text
-Dockerfile
+Dockerfile.runtime
 runtime/official-invocations/main.py
 runtime/official-invocations/entrypoint.sh
 runtime/official-invocations/requirements.txt
@@ -109,7 +109,7 @@ npm run smoke
 Files:
 
 ```text
-Dockerfile
+Dockerfile.runtime
 src/backend.mjs
 src/adapters/pi-rpc.mjs
 src/runtime/artifacts.mjs

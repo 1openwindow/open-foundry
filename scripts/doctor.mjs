@@ -1,7 +1,10 @@
 #!/usr/bin/env node
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import { constants } from "node:fs";
 import { execFileSync } from "node:child_process";
+
+const args = new Set(process.argv.slice(2));
+const deploymentMode = args.has("--deployment");
 
 const checks = [];
 let failures = 0;
@@ -177,15 +180,16 @@ function yamlListBlockContains(text, dottedPath, expected) {
 async function checkRepoShape() {
   const requiredFiles = [
     "README.md",
-    "Dockerfile",
     "Dockerfile.runtime",
-    "azure.yaml",
-    "agent.yaml",
-    "agent.manifest.yaml",
+    "examples/demo-agent/Dockerfile",
+    "examples/demo-agent/demo-workspace/README.md",
+    "examples/full-repo-deploy/azure.yaml",
+    "examples/full-repo-deploy/agent.yaml",
+    "examples/full-repo-deploy/agent.manifest.yaml",
     "src/backend.mjs",
     "src/adapters/pi-rpc.mjs",
     ".env.example",
-    "agent.config.example.yaml",
+    "templates/azd-native/agent.config.example.yaml",
     "docs/byo-pi-agent.md",
     "docs/demo-checklist.md",
     "docs/handoff.md",
@@ -197,6 +201,7 @@ async function checkRepoShape() {
     "runtime/official-invocations/requirements.txt",
     "runtime/official-invocations/entrypoint.sh",
     "runtime/official-invocations/smoke-local.sh",
+    ".agents/skills/deploy-pi-agent-to-foundry/SKILL.md",
   ];
 
   for (const file of requiredFiles) {
@@ -207,32 +212,32 @@ async function checkRepoShape() {
   if (compareNodeVersion(process.version, "22.19.0") >= 0) pass(`Node ${process.version} satisfies >=22.19.0`);
   else fail(`Node ${process.version} is too old`, "Expected >=22.19.0");
 
-  const agentYaml = await readOptional("agent.yaml");
+  const agentYaml = await readOptional("templates/azd-native/agent.yaml");
   if (agentYaml) {
-    validateResourceTier(agentYaml, "agent.yaml");
+    validateResourceTier(agentYaml, "templates/azd-native/agent.yaml");
     const reserved = extractEnvNames(agentYaml).filter((name) => name.startsWith("AGENT_") || name.startsWith("FOUNDRY_"));
-    if (reserved.length === 0) pass("agent.yaml avoids reserved AGENT_* and FOUNDRY_* env vars");
-    else fail(`agent.yaml defines reserved env vars: ${reserved.join(", ")}`);
+    if (reserved.length === 0) pass("templates/azd-native/agent.yaml avoids reserved AGENT_* and FOUNDRY_* env vars");
+    else fail(`templates/azd-native/agent.yaml defines reserved env vars: ${reserved.join(", ")}`);
   }
 
-  const manifest = await readOptional("agent.manifest.yaml");
+  const manifest = await readOptional("templates/azd-native/agent.manifest.yaml");
   if (manifest) {
     const reserved = extractEnvNames(manifest).filter((name) => name.startsWith("AGENT_") || name.startsWith("FOUNDRY_"));
-    if (reserved.length === 0) pass("agent.manifest.yaml avoids reserved AGENT_* and FOUNDRY_* env vars");
-    else fail(`agent.manifest.yaml defines reserved env vars: ${reserved.join(", ")}`);
+    if (reserved.length === 0) pass("templates/azd-native/agent.manifest.yaml avoids reserved AGENT_* and FOUNDRY_* env vars");
+    else fail(`templates/azd-native/agent.manifest.yaml defines reserved env vars: ${reserved.join(", ")}`);
   }
 
   const gitignore = (await readOptional(".gitignore")) ?? "";
   if (/^\.azure\/?$/m.test(gitignore)) pass(".gitignore excludes .azure/");
   else warn(".gitignore should exclude .azure/ because it may contain local azd secrets");
 
-  const azureYaml = (await readOptional("azure.yaml")) ?? "";
-  if (/remoteBuild:\s*true/.test(azureYaml)) pass("azure.yaml enables docker.remoteBuild");
-  else warn("azure.yaml does not enable docker.remoteBuild; local Docker may be required for deployment");
+  const azureYaml = (await readOptional("templates/azd-native/azure.yaml")) ?? "";
+  if (/remoteBuild:\s*true/.test(azureYaml)) pass("templates/azd-native/azure.yaml enables docker.remoteBuild");
+  else warn("templates/azd-native/azure.yaml does not enable docker.remoteBuild; local Docker may be required for deployment");
   if (/startupCommand:\s*runtime\/official-invocations\/entrypoint\.sh/.test(azureYaml) || /startupCommand:\s*\/app\/runtime\/official-invocations\/entrypoint\.sh/.test(azureYaml)) {
-    pass("azure.yaml starts the official Invocations SDK entrypoint");
+    pass("templates/azd-native/azure.yaml starts the official Invocations SDK entrypoint");
   } else {
-    fail("azure.yaml should start runtime/official-invocations/entrypoint.sh, not the internal Node backend directly");
+    fail("templates/azd-native/azure.yaml should start runtime/official-invocations/entrypoint.sh, not the internal Node backend directly");
   }
 }
 
@@ -264,10 +269,32 @@ function checkTools() {
   }
 }
 
+async function looksLikeUserAgentRepo() {
+  if (await fileExists("agent.config.yaml")) return true;
+  if (await fileExists(".azd/pi-foundry/Dockerfile")) return true;
+  if (await fileExists("mcp.config.json")) return true;
+  if (await fileExists("prompts")) return true;
+  if (await fileExists("demo-workspace")) return true;
+
+  if (await fileExists(".agents/skills")) {
+    try {
+      const entries = await readdir(".agents/skills", { withFileTypes: true });
+      if (entries.some((entry) => entry.isDirectory() && entry.name !== "deploy-pi-agent-to-foundry")) return true;
+    } catch {
+      // Ignore unreadable skills directory and fall through to false.
+    }
+  }
+  return false;
+}
+
 function checkAgentConfig(values = {}) {
   return readOptional("agent.config.yaml").then(async (configText) => {
     if (!configText) {
-      warn("agent.config.yaml not found", "Copy agent.config.example.yaml to agent.config.yaml when customizing a BYO Pi agent");
+      if (await looksLikeUserAgentRepo()) {
+        warn("agent.config.yaml not found", "Copy agent.config.example.yaml to agent.config.yaml when customizing a BYO Pi agent");
+      } else {
+        pass("agent.config.yaml check skipped; current repo does not look like a user Pi agent repo");
+      }
       return;
     }
 
@@ -391,5 +418,10 @@ function printReport() {
 
 await checkRepoShape();
 checkTools();
-await checkAzdEnvironment();
+if (deploymentMode) {
+  await checkAzdEnvironment();
+} else {
+  pass("azd environment check skipped; use --deployment to validate deployment env values");
+  await checkAgentConfig({});
+}
 printReport();

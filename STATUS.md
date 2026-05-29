@@ -62,10 +62,10 @@ Important files:
 
 ```text
 src/backend.mjs              HTTP wrapper and pi RPC bridge
-Dockerfile                  Hosted Agent container image
-azure.yaml                  azd service config
-agent.yaml                  Hosted Agent definition
-agent.manifest.yaml         azd/Foundry manifest
+Dockerfile.runtime           reusable runtime base image
+templates/azd-native/        BYO Pi agent thin adapter template
+examples/demo-agent/         demo/test agent skills and workspace
+examples/full-repo-deploy/   legacy full-repo deployment reference
 scripts/                    local, Docker, and smoke helpers
 README.md                   usage docs
 STATUS.md                   this handoff/status file
@@ -278,7 +278,7 @@ This is not a blocker; remote real invocation works.
 
 - Foundry reserves `FOUNDRY_*` and `AGENT_*` environment variable prefixes. Use `PI_*` names for custom env vars.
 - Foundry requires `GET /readiness` to return HTTP 200.
-- Foundry Hosted Agent internal port convention is `8088`; Dockerfile exposes `8088`.
+- Foundry Hosted Agent internal port convention is `8088`; `Dockerfile.runtime` and the demo Dockerfile expose `8088`.
 - Current Foundry-facing implementation uses the official Python `azure-ai-agentserver-invocations` SDK.
 - The Node process is retained as the internal Pi backend for RPC lifecycle, sessions, streaming, and artifacts.
 

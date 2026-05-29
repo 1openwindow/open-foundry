@@ -99,6 +99,7 @@ Files added to the existing Pi agent repo:
 azure.yaml
 agent.yaml
 agent.manifest.yaml
+agent.config.example.yaml
 .dockerignore
 .azd/pi-foundry/Dockerfile
 .azd/pi-foundry/README.md
@@ -106,7 +107,7 @@ agent.manifest.yaml
 .azd/pi-foundry/postdeploy.mjs
 ```
 
-The adapter does not modify `.agents/skills/`, prompts, MCP config, demo workspace, or business code. The default Hosted Agent name in the template is `pi-agent`; customize `agent.yaml` and `agent.manifest.yaml` after init if you need a different hosted agent name. `agent.yaml` also contains a valid placeholder image (`example.azurecr.io/pi-agent:latest`) for schema validation. `azure.yaml` sets the Docker publish image to `pi-agent:latest`; azd supplies the actual published container image during deployment.
+The adapter does not modify `.agents/skills/`, prompts, MCP config, demo workspace, or business code. The optional `agent.config.example.yaml` documents high-level BYO agent settings; copy it to `agent.config.yaml` if you want doctor to validate runtime args, skills path, MCP config, model alignment, and artifact settings. The default Hosted Agent name in the template is `pi-agent`; customize `agent.yaml` and `agent.manifest.yaml` after init if you need a different hosted agent name. `agent.yaml` also contains a valid placeholder image (`example.azurecr.io/pi-agent:latest`) for schema validation. `azure.yaml` sets the Docker publish image to `pi-agent:latest`; azd supplies the actual published container image during deployment.
 
 ## Runtime image
 

@@ -16,6 +16,22 @@ No wrapper repo is required for the default path. The user's existing Pi agent r
 
 This path has been validated end-to-end with `clean-pi-agent` deployed as `pi-agent` v1 using `crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0`. See [docs/azd-native-ux.md](./docs/azd-native-ux.md) for the UX direction and [docs/runtime-image.md](./docs/runtime-image.md) for runtime image build/publish details.
 
+## Repository layout
+
+The product path is intentionally separated from demo/test agent assets:
+
+```text
+src/                                      Node Pi backend and runtime helpers
+runtime/official-invocations/             Foundry Invocations protocol host wrapper
+Dockerfile.runtime                        reusable pi-foundry runtime base image
+templates/azd-native/                     thin BYO Pi agent adapter template, including optional agent.config.example.yaml
+.agents/skills/deploy-pi-agent-to-foundry/ natural-language onboarding/deploy skill
+examples/demo-agent/                      bundled demo/test agent assets
+examples/full-repo-deploy/                legacy full-repo deployment reference
+```
+
+The root repo no longer carries a default test agent. Demo skills and demo workspace files live under `examples/demo-agent/`; user-owned skills and prompts come from the user's own Pi agent repo in the BYO flow.
+
 ## Runtime modes
 
 `pi-foundry` now uses the official Invocations host as the supported Foundry entrypoint:
@@ -31,7 +47,7 @@ Foundry /invocations
   -> pi --mode rpc
 ```
 
-Use `Dockerfile` or the runtime files under `runtime/official-invocations/` for this mode. Validate it locally with:
+Use `Dockerfile.runtime` for the reusable runtime base image, or the runtime files under `runtime/official-invocations/` for local process-level testing. Validate it locally with:
 
 ```bash
 npm run smoke
@@ -66,7 +82,7 @@ Customize the agent layer:
 - Add third-party credentials such as `GITHUB_TOKEN` or `JIRA_TOKEN` through your deployment environment.
 - Write generated downloadable outputs under the artifact directory and optionally provide `artifact-manifest.json`.
 
-The common azd-native path should not require changing user business code, skills, prompts, or MCP config. It adds deployment files such as `azure.yaml`, `agent.yaml`, `agent.manifest.yaml`, `.dockerignore`, and `.azd/pi-foundry/*`.
+The common azd-native path should not require changing user business code, skills, prompts, or MCP config. It adds deployment files such as `azure.yaml`, `agent.yaml`, `agent.manifest.yaml`, `.dockerignore`, `.azd/pi-foundry/*`, and optional `agent.config.example.yaml` for documenting/validating a BYO agent's high-level settings.
 
 ### Agentic onboarding skill
 
@@ -180,13 +196,19 @@ Artifact paths are constrained to `FILES_DIR`; path traversal outside that direc
 
 ## Docker
 
-Build:
+Build the reusable runtime base image:
+
+```bash
+npm run runtime:build
+```
+
+Build the bundled demo-agent image, if you need the example skills/workspace baked in:
 
 ```bash
 npm run docker:build
 ```
 
-The local build script uses `--network=host`, proxy build args, and `--pull=false`. This works around WSL/Docker daemon proxy issues after the base image exists locally.
+The demo build script uses `examples/demo-agent/Dockerfile` with `--network=host`, proxy build args, and `--pull=false`. This works around WSL/Docker daemon proxy issues after the base image exists locally.
 
 Runtime base image smoke test:
 
@@ -194,15 +216,15 @@ Runtime base image smoke test:
 npm run runtime:smoke
 ```
 
-Manual full-image mock run:
+Manual demo-agent mock run:
 
 ```bash
 docker run --rm -p 8080:8088 \
   -e PI_MOCK=1 \
-  pi-foundry:local
+  pi-foundry-demo:local
 ```
 
-Manual real run with Foundry OpenAI-compatible provider:
+Manual demo-agent real run with Foundry OpenAI-compatible provider:
 
 ```bash
 docker run --rm -p 8080:8088 \
@@ -210,16 +232,16 @@ docker run --rm -p 8080:8088 \
   -e PI_OPENAI_BASE_URL="https://<account>.cognitiveservices.azure.com/openai/v1" \
   -e PI_OPENAI_MODEL="<foundry-model-or-deployment>" \
   -e PI_ARGS="--mode rpc --no-session --provider foundry --model <foundry-model-or-deployment>" \
-  pi-foundry:local
+  pi-foundry-demo:local
 ```
 
-For local workspace mounting:
+For local workspace mounting with the demo image:
 
 ```bash
 docker run --rm -p 8080:8088 \
   -v "$PWD:/workspace" \
   -e PI_MOCK=1 \
-  pi-foundry:local
+  pi-foundry-demo:local
 ```
 
 ## Request format

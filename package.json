@@ -12,6 +12,7 @@
     "smoke": "runtime/official-invocations/smoke-local.sh",
     "smoke:official": "runtime/official-invocations/smoke-local.sh",
     "docker:build": "scripts/docker-build-local.sh",
+    "demo:docker:build": "scripts/docker-build-local.sh",
     "runtime:build": "scripts/runtime-image-build.sh",
     "runtime:acr-build": "node scripts/runtime-image-acr-build.mjs",
     "runtime:smoke": "scripts/runtime-image-smoke.sh"

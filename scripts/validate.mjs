@@ -71,27 +71,31 @@ function validateResourceTier(yamlText) {
   const cpuMatch = yamlText.match(/^\s*cpu:\s*["']?([^"'\s]+)["']?\s*$/m);
   const memoryMatch = yamlText.match(/^\s*memory:\s*["']?([^"'\s]+)["']?\s*$/m);
   if (!cpuMatch || !memoryMatch) {
-    fail("agent.yaml should specify resources.cpu and resources.memory");
+    fail("template agent.yaml should specify resources.cpu and resources.memory");
     return;
   }
 
   const pair = `${cpuMatch[1]}/${memoryMatch[1]}`;
   const validPairs = new Set(["0.25/0.5Gi", "0.5/1Gi", "1/2Gi", "2/4Gi"]);
-  if (validPairs.has(pair)) pass(`agent.yaml uses valid Hosted Agent resource tier ${pair}`);
-  else fail(`agent.yaml uses invalid Hosted Agent resource tier ${pair}; expected one of ${Array.from(validPairs).join(", ")}`);
+  if (validPairs.has(pair)) pass(`template agent.yaml uses valid Hosted Agent resource tier ${pair}`);
+  else fail(`template agent.yaml uses invalid Hosted Agent resource tier ${pair}; expected one of ${Array.from(validPairs).join(", ")}`);
 }
 
 async function main() {
   const requiredFiles = [
     "README.md",
-    "Dockerfile",
     "Dockerfile.runtime",
-    "azure.yaml",
-    "agent.yaml",
-    "agent.manifest.yaml",
+    "examples/demo-agent/Dockerfile",
+    "examples/demo-agent/demo-workspace/README.md",
+    "examples/demo-agent/.agents/skills/edge-tts/SKILL.md",
+    "examples/demo-agent/.agents/skills/gpt-image-2/SKILL.md",
+    "examples/demo-agent/.agents/skills/hyperframes/SKILL.md",
+    "examples/full-repo-deploy/azure.yaml",
+    "examples/full-repo-deploy/agent.yaml",
+    "examples/full-repo-deploy/agent.manifest.yaml",
     "src/backend.mjs",
     ".env.example",
-    "agent.config.example.yaml",
+    "templates/azd-native/agent.config.example.yaml",
     "docs/byo-pi-agent.md",
     "docs/demo-checklist.md",
     "docs/handoff.md",
@@ -115,6 +119,7 @@ async function main() {
     "templates/azd-native/.azd/pi-foundry/Dockerfile",
     "templates/azd-native/.azd/pi-foundry/doctor.mjs",
     "templates/azd-native/.azd/pi-foundry/postdeploy.mjs",
+    ".agents/skills/deploy-pi-agent-to-foundry/SKILL.md",
   ];
 
   for (const file of requiredFiles) {
@@ -126,19 +131,19 @@ async function main() {
   if (compareNodeVersion(nodeVersion, "22.19.0") >= 0) pass(`Node ${nodeVersion} satisfies >=22.19.0`);
   else fail(`Node ${nodeVersion} is too old; expected >=22.19.0`);
 
-  const agentYaml = await readOptional("agent.yaml");
+  const agentYaml = await readOptional("templates/azd-native/agent.yaml");
   if (agentYaml) {
     validateResourceTier(agentYaml);
     const reservedEnvNames = extractEnvNames(agentYaml).filter((name) => name.startsWith("AGENT_") || name.startsWith("FOUNDRY_"));
-    if (reservedEnvNames.length === 0) pass("agent.yaml does not define reserved AGENT_* or FOUNDRY_* environment variables");
-    else fail(`agent.yaml defines reserved environment variables: ${reservedEnvNames.join(", ")}`);
+    if (reservedEnvNames.length === 0) pass("templates/azd-native/agent.yaml does not define reserved AGENT_* or FOUNDRY_* environment variables");
+    else fail(`templates/azd-native/agent.yaml defines reserved environment variables: ${reservedEnvNames.join(", ")}`);
   }
 
-  const manifestYaml = await readOptional("agent.manifest.yaml");
+  const manifestYaml = await readOptional("templates/azd-native/agent.manifest.yaml");
   if (manifestYaml) {
     const reservedEnvNames = extractEnvNames(manifestYaml).filter((name) => name.startsWith("AGENT_") || name.startsWith("FOUNDRY_"));
-    if (reservedEnvNames.length === 0) pass("agent.manifest.yaml does not define reserved AGENT_* or FOUNDRY_* environment variables");
-    else fail(`agent.manifest.yaml defines reserved environment variables: ${reservedEnvNames.join(", ")}`);
+    if (reservedEnvNames.length === 0) pass("templates/azd-native/agent.manifest.yaml does not define reserved AGENT_* or FOUNDRY_* environment variables");
+    else fail(`templates/azd-native/agent.manifest.yaml defines reserved environment variables: ${reservedEnvNames.join(", ")}`);
   }
 
   const envExample = await readOptional(".env.example");
