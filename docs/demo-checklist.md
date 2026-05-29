@@ -15,9 +15,7 @@ No wrapper repo is required for the default path.
 | Repo | Purpose |
 |---|---|
 | `~/repos/media-report-agent` | Example existing user-owned Pi agent; now also demonstrates the azd-native in-repo adapter path. |
-| `~/repos/pi-foundry` | Runtime source, adapter template, runtime image build scripts, and legacy wrapper flow. |
-| `~/repos/media-report-foundry` | Legacy wrapper example; validates the older self-contained wrapper story. |
-| `~/repos/pi-foundry-official-invocations` | Official Invocations deployment reference. |
+| `~/repos/pi-foundry` | Runtime source, adapter template, runtime image build scripts, and docs. |
 
 ## Demo 1: show the existing Pi agent repo
 
@@ -167,60 +165,6 @@ Verify a returned URL:
 curl --noproxy '*' -I '<index-html-url>'
 ```
 
-## Legacy Demo 8: wrapper creation workflow
-
-Use only when demonstrating the older self-contained wrapper story:
-
-```bash
-cd ~/repos/pi-foundry
-npm run create:wrapper -- \
-  --name demo-pi-agent \
-  --target ~/repos/demo-pi-agent \
-  --from ~/repos/media-report-agent \
-  --mode official \
-  --acr crce6hg4ngzj3as.azurecr.io \
-  --dry-run
-npm run validate
-```
-
-Known-good legacy remote agent:
-
-```text
-media-report-foundry v1
-```
-
-Invoke:
-
-```bash
-cd ~/repos/media-report-foundry
-azd ai agent invoke media-report-foundry \
-  --protocol invocations \
-  --version 1 \
-  --new-session \
-  --timeout 600 \
-  'Say exactly: ok'
-```
-
-## Legacy Demo 9: official Invocations runtime reference
-
-Known-good remote agent:
-
-```text
-pi-foundry-official-invocations v3
-```
-
-Invoke:
-
-```bash
-cd ~/repos/pi-foundry-official-invocations
-azd ai agent invoke pi-foundry-official-invocations \
-  --protocol invocations \
-  --version 3 \
-  --new-session \
-  --timeout 900 \
-  'Say exactly: ok'
-```
-
 ## Recommended story to tell
 
 1. Start with the existing local Pi agent (`media-report-agent`).
@@ -229,4 +173,3 @@ azd ai agent invoke pi-foundry-official-invocations \
 4. Run `node .azd/pi-foundry/doctor.mjs`.
 5. Deploy with `azd up` from the existing repo.
 6. Show remote invocation and artifact URLs.
-7. Mention wrapper mode only as an advanced/self-contained fallback.

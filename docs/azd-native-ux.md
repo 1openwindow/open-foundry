@@ -9,15 +9,7 @@ No wrapper repo. No runtime vendoring. No changes to agent business code.
 
 ## Why
 
-The earlier wrapper flow is technically safe, but it asks developers to reason about multiple repos:
-
-```text
-my-agent/
-my-agent-foundry/
-pi-foundry/
-```
-
-That is not the normal developer habit. Developers expect to stay inside their own repo and run the platform's deployment workflow:
+Developers expect to stay inside their own repo and run the platform's deployment workflow:
 
 ```bash
 cd my-agent
@@ -48,6 +40,8 @@ agent.manifest.yaml
 .dockerignore
 .azd/pi-foundry/Dockerfile
 .azd/pi-foundry/README.md
+.azd/pi-foundry/doctor.mjs
+.azd/pi-foundry/postdeploy.mjs
 ```
 
 It does **not** add:
@@ -87,6 +81,7 @@ npm run install:azd-adapter -- \
   --target ~/repos/my-agent \
   --name my-agent \
   --acr <registry>.azurecr.io \
+  --runtime-image <registry>.azurecr.io/pi-foundry-runtime:0.1.0 \
   --dry-run
 ```
 
@@ -96,7 +91,8 @@ Then apply after review:
 npm run install:azd-adapter -- \
   --target ~/repos/my-agent \
   --name my-agent \
-  --acr <registry>.azurecr.io
+  --acr <registry>.azurecr.io \
+  --runtime-image <registry>.azurecr.io/pi-foundry-runtime:0.1.0
 ```
 
 From the user's repo:
@@ -110,6 +106,7 @@ azd env set 'PI_ARGS=--mode rpc --no-session --provider foundry --model <model>'
 azd env set PI_OPENAI_BASE_URL 'https://<account>.cognitiveservices.azure.com/openai/v1'
 azd env set PI_OPENAI_MODEL '<model>'
 azd env set PI_OPENAI_API_KEY '<secret>'
+node .azd/pi-foundry/doctor.mjs
 azd up
 ```
 
@@ -148,4 +145,4 @@ Recommended artifacts:
    - smoke invoke helpers
    - azd workflow entrypoints
 
-The skill should guide users through the azd-native path by default and reserve the old wrapper path as an advanced/self-contained option.
+The skill should guide users through the azd-native path only.

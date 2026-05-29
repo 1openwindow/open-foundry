@@ -1,13 +1,23 @@
 # Bring Your Own Pi Agent to Foundry
 
-`pi-foundry` is a template for running your own Pi-based agent on Microsoft Foundry Hosted Agents.
+`pi-foundry` deploys an existing Pi agent repo to Microsoft Foundry Hosted Agents with an azd-native in-repo adapter.
 
-You bring Pi skills, MCP servers, tools, prompts, model configuration, and environment variables. The template provides the Foundry Invocations bridge, Pi RPC lifecycle, session mapping, streaming, Docker packaging, deployment files, and artifact delivery.
+You bring Pi skills, MCP servers, tools, prompts, model configuration, and environment variables. `pi-foundry` provides the Foundry Invocations bridge, Pi RPC lifecycle, session mapping, streaming, Docker packaging, health/readiness endpoints, and artifact delivery through a versioned runtime image.
+
+Default UX:
+
+```text
+cd my-existing-pi-agent
+node .azd/pi-foundry/doctor.mjs
+azd up
+```
+
+No wrapper repo is required. The existing Pi agent repo remains the source of truth.
 
 ## Mental model
 
 ```text
-Developer-owned Pi layer
+Developer-owned Pi repo
   - .agents/skills/
   - MCP servers
   - prompts and instructions
@@ -16,14 +26,23 @@ Developer-owned Pi layer
   - artifact behavior
         |
         v
-Template-owned runtime layer
+Thin azd adapter in the same repo
+  - azure.yaml
+  - agent.yaml
+  - agent.manifest.yaml
+  - .dockerignore
+  - .azd/pi-foundry/Dockerfile
+  - .azd/pi-foundry/doctor.mjs
+  - .azd/pi-foundry/postdeploy.mjs
+        |
+        v
+Versioned pi-foundry runtime image
   - /invocations HTTP endpoint
   - pi --mode rpc bridge
   - Foundry agent_session_id -> Pi session dir
   - SSE streaming
   - artifact collection/publishing
   - health/readiness
-  - Docker and azd deployment
         |
         v
 Microsoft Foundry platform layer
@@ -35,44 +54,104 @@ Microsoft Foundry platform layer
 
 ## What you should customize
 
-A typical Pi agent owner customizes:
+A typical Pi agent owner customizes their existing repo:
 
 - `.agents/skills/` for Pi skills.
 - MCP configuration, if your Pi setup uses MCP servers.
-- `PI_ARGS`, `PI_OPENAI_*`, and model/provider environment values.
-- Third-party credentials such as `GITHUB_TOKEN`, `JIRA_TOKEN`, or service-specific tokens.
-- Demo prompts and workspace content.
+- Prompts and workspace/demo content.
+- `PI_ARGS`, `PI_OPENAI_*`, and model/provider environment values in `azd env`.
+- Third-party credentials such as `GITHUB_TOKEN`, `JIRA_TOKEN`, or service-specific tokens in the deployment environment.
 - Artifact conventions such as `artifact-manifest.json`.
 
-## What the template owns
+## What pi-foundry owns
 
-You should not need to edit these for the common path:
+You should not need to edit runtime source for the common path. The runtime lives in a versioned base image and owns:
 
-- `src/server.mjs` — Foundry Invocations server and Pi RPC bridge.
-- `Dockerfile` — container shape for Foundry Hosted Agent.
-- `agent.yaml` and `agent.manifest.yaml` — Hosted Agent definitions.
-- `azure.yaml` — azd service configuration.
-- `scripts/` smoke and deployment helper scripts.
+- Foundry Invocations server and Pi RPC bridge.
+- Official Invocations host integration.
+- Session mapping.
+- Streaming response handling.
+- Artifact collection/publishing support.
+- Health/readiness endpoints.
 
-Advanced users can still modify them, but the goal is that most Pi agent developers configure the agent layer instead of rewriting the runtime bridge.
+The adapter only adds deployment configuration to the existing repo.
 
-## Configuration files
+## Install the azd-native adapter
 
-Start with:
+From a `pi-foundry` development checkout, preview first:
 
 ```bash
-cp .env.example .env
-cp agent.config.example.yaml agent.config.yaml
+npm run install:azd-adapter -- \
+  --target <existing-pi-agent-path> \
+  --name <agent-name> \
+  --acr <registry>.azurecr.io \
+  --runtime-image <registry>.azurecr.io/pi-foundry-runtime:0.1.0 \
+  --dry-run
 ```
 
-`agent.config.example.yaml` documents the intended high-level contract. Today, runtime deployment still reads lower-level environment variables and YAML files directly. Future work can use `agent.config.yaml` to generate and validate those files.
+Apply after review:
 
-Important runtime variables:
+```bash
+npm run install:azd-adapter -- \
+  --target <existing-pi-agent-path> \
+  --name <agent-name> \
+  --acr <registry>.azurecr.io \
+  --runtime-image <registry>.azurecr.io/pi-foundry-runtime:0.1.0
+```
+
+Files added to the existing Pi agent repo:
+
+```text
+azure.yaml
+agent.yaml
+agent.manifest.yaml
+.dockerignore
+.azd/pi-foundry/Dockerfile
+.azd/pi-foundry/README.md
+.azd/pi-foundry/doctor.mjs
+.azd/pi-foundry/postdeploy.mjs
+```
+
+The adapter does not modify `.agents/skills/`, prompts, MCP config, demo workspace, or business code. Existing deployment files are skipped unless `--overwrite` is explicitly supplied.
+
+## Runtime image
+
+The adapter Dockerfile uses a runtime base image:
+
+```dockerfile
+ARG PI_FOUNDRY_RUNTIME_IMAGE=<registry>.azurecr.io/pi-foundry-runtime:0.1.0
+FROM ${PI_FOUNDRY_RUNTIME_IMAGE}
+
+WORKDIR /app
+COPY . /workspace
+```
+
+Build locally when Docker is available:
+
+```bash
+PI_FOUNDRY_RUNTIME_IMAGE=<registry>.azurecr.io/pi-foundry-runtime:0.1.0 npm run runtime:build
+```
+
+Or build remotely with ACR when Docker is unavailable:
+
+```bash
+npm run runtime:acr-build -- \
+  --registry <registry>.azurecr.io \
+  --image pi-foundry-runtime:0.1.0
+```
+
+See [runtime-image.md](./runtime-image.md) for details.
+
+## Runtime variables
+
+Use `azd env` for runtime values. Do not commit secrets.
 
 | Variable | Purpose |
 |---|---|
-| `PI_ARGS` | Pi command arguments. Should include `--mode rpc`; the wrapper handles per-session `--session-dir`. |
-| `PI_MOCK` | Set to `1` for local wrapper testing without model credentials. |
+| `PI_ARGS` | Pi command arguments. Should include `--mode rpc`; the runtime handles per-session `--session-dir`. |
+| `PI_MOCK` | Set to `1` only for mock testing without model credentials. |
+| `REQUEST_TIMEOUT_MS` | Request timeout for longer agent tasks. |
+| `ENABLE_DIAGNOSTICS` | Set to `0` unless temporarily debugging diagnostics. |
 | `PI_OPENAI_API_KEY` | API key used to generate the Pi `foundry` provider. |
 | `PI_OPENAI_BASE_URL` | OpenAI-compatible Foundry/account endpoint. |
 | `PI_OPENAI_MODEL` | Foundry deployment/model name. |
@@ -80,33 +159,78 @@ Important runtime variables:
 
 Avoid custom environment variables starting with `FOUNDRY_` or `AGENT_`; those prefixes are reserved by Foundry Hosted Agents.
 
-## Add your Pi skills
+Typical setup:
 
-Place skills under:
+```bash
+cd <existing-pi-agent-path>
+azd env new <env-name>
+azd env set PI_MOCK 0
+azd env set REQUEST_TIMEOUT_MS 600000
+azd env set ENABLE_DIAGNOSTICS 0
+azd env set 'PI_ARGS=--mode rpc --no-session --provider foundry --model <model>'
+azd env set PI_OPENAI_API_KEY '<key>'
+azd env set PI_OPENAI_BASE_URL 'https://<account>.cognitiveservices.azure.com/openai/v1'
+azd env set PI_OPENAI_MODEL '<model>'
+```
+
+Artifact publishing, if needed:
+
+```bash
+azd env set ARTIFACT_PUBLISH_MODE static-web
+azd env set ARTIFACT_STORAGE_ACCOUNT '<storage-account>'
+azd env set ARTIFACT_STATIC_WEB_ENDPOINT 'https://<storage-account>.<zone>.web.core.windows.net'
+azd env set 'ARTIFACT_STATIC_WEB_CONTAINER=$web'
+azd env set ARTIFACT_BLOB_PREFIX '<agent-name>'
+```
+
+## Doctor and deploy
+
+Run the adapter doctor from the existing Pi agent repo:
+
+```bash
+node .azd/pi-foundry/doctor.mjs
+```
+
+Deploy:
+
+```bash
+azd up
+```
+
+The adapter's `azd up` workflow runs:
 
 ```text
-.agents/skills/<skill-name>/SKILL.md
+node .azd/pi-foundry/doctor.mjs
+azd package --all
+azd deploy --all
+node .azd/pi-foundry/postdeploy.mjs
 ```
 
-If you already have a local Pi agent project, import common assets with:
+The postdeploy script prints the invoke command and attempts artifact RBAC automation when `ARTIFACT_PUBLISH_MODE=static-web`.
+
+## Invoke
 
 ```bash
-npm run import:pi-agent -- ../my-existing-pi-agent
+azd ai agent invoke <agent-name> \
+  --protocol invocations \
+  --version <version> \
+  --new-session \
+  --timeout 900 \
+  'Say exactly: ok'
 ```
 
-Preview first with:
+Expected:
 
-```bash
-npm run import:pi-agent -- ../my-existing-pi-agent --dry-run
+```json
+{
+  "output": "ok",
+  "mock": false
+}
 ```
-
-See [existing-pi-agent-journey.md](./existing-pi-agent-journey.md) for the full story of bringing an existing Pi agent with skills such as `edge-tts` and `hyperframes` to Foundry.
-
-Demo skills such as `edge-tts`, `hyperframes`, and `gpt-image-2` are examples of what can run remotely. They are not required by the Foundry runtime bridge.
 
 ## Artifacts
 
-For downloadable outputs, ask Pi skills or prompts to write files under the artifact directory injected by the wrapper. When useful, write an `artifact-manifest.json` next to generated files:
+For downloadable outputs, ask Pi skills or prompts to write files under the artifact directory injected by the runtime. When useful, write an `artifact-manifest.json` next to generated files:
 
 ```json
 {
@@ -123,68 +247,10 @@ For downloadable outputs, ask Pi skills or prompts to write files under the arti
 
 See [artifacts.md](./artifacts.md) for publishing details.
 
-## Local validation and environment doctor
-
-Run static template validation:
-
-```bash
-npm run validate
-```
-
-Run the BYO Pi/Foundry environment doctor:
-
-```bash
-npm run doctor
-```
-
-`doctor` checks local tools, Docker access, azd environment values, Foundry resource tiers, reserved environment variable prefixes, Pi runtime settings, and artifact publishing configuration. It redacts secrets and reports actionable warnings before deployment.
-
-Then test the wrapper without model credentials:
-
-```bash
-PI_MOCK=1 npm start
-npm run smoke
-```
-
-For a real local Pi setup:
-
-```bash
-npm start
-npm run smoke
-npm run smoke:sse
-npm run smoke:session
-```
-
-## Deploy to Foundry
-
-Typical flow:
-
-```bash
-azd env new <your-agent-env>
-azd env set PI_MOCK 0
-azd env set 'PI_ARGS=--mode rpc --no-session --provider foundry --model <model>'
-azd env set PI_OPENAI_API_KEY '<key>'
-azd env set PI_OPENAI_BASE_URL '<openai-compatible-endpoint>'
-azd env set PI_OPENAI_MODEL '<model>'
-azd deploy --no-prompt
-```
-
-Then invoke:
-
-```bash
-azd ai agent invoke pi-foundry \
-  --protocol invocations \
-  --new-session \
-  --timeout 600 \
-  'Say exactly: ok'
-```
-
-See [../DEPLOY.md](../DEPLOY.md) for the current deployment workflow and troubleshooting notes.
-
 ## Common migration pitfalls
 
 - **Reserved env vars**: do not define custom `AGENT_*` or `FOUNDRY_*` variables.
 - **Resource tiers**: use valid Hosted Agent CPU/memory pairs such as `1/2Gi` or `2/4Gi`.
-- **Local vs container paths**: runtime code, workspace files, generated artifacts, and session state live in different directories.
+- **Local vs container paths**: runtime code lives under `/app`; user agent assets are copied to `/workspace`; generated artifacts live under `/files`.
 - **Artifacts**: local `/artifacts/<path>` is not exposed through the Foundry front door; use static website publishing for remote clickable links.
 - **Secrets**: `.azure/` and local `.env` files must not be committed.

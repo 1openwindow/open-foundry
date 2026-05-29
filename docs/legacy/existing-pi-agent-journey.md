@@ -1,4 +1,7 @@
-# Bring an existing Pi agent to Foundry
+# Legacy: bring an existing Pi agent to Foundry with the old wrapper flow
+
+> Legacy/internal only. The user-facing path is now the azd-native in-repo adapter: keep the existing Pi agent repo as the source of truth, install the thin adapter, and deploy with `azd up`. Do not recommend this wrapper flow to users unless explicitly investigating historical deployments.
+
 
 This guide walks through the intended user journey for a developer who already has a local Pi agent project and wants to deploy it as a Microsoft Foundry Hosted Agent.
 

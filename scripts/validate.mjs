@@ -94,8 +94,6 @@ async function main() {
     ".env.example",
     "agent.config.example.yaml",
     "docs/byo-pi-agent.md",
-    "docs/existing-pi-agent-journey.md",
-    "docs/deploy-existing-pi-agent.md",
     "docs/demo-checklist.md",
     "docs/handoff.md",
     "docs/azd-native-ux.md",

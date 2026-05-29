@@ -4,49 +4,51 @@ Last updated: 2026-05-29
 
 ## Summary
 
-`pi-foundry` is now a **Bring Your Own Pi Agent to Foundry** template/runtime.
+`pi-foundry` is now a runtime plus **azd-native in-repo adapter** for deploying existing Pi agents to Foundry.
 
-The recommended direction is:
+The user-facing direction is:
 
 ```text
-Official Invocations mode for Foundry deployment
-Node direct mode for local development, backend validation, and fallback
+existing Pi agent repo -> thin azd adapter -> runtime base image -> azd up -> Foundry Hosted Agent
 ```
+
+No wrapper repo is required for the default path.
 
 ## Current repos
 
 | Repo | Remote | Status |
 |---|---|---|
 | `~/repos/pi-foundry` | `https://github.com/1openwindow/pi-foundry` | Main template/runtime, private, clean/pushed. |
-| `~/repos/media-report-agent` | `https://github.com/1openwindow/media-report-agent` | Example existing Pi agent, private, clean/pushed. |
-| `~/repos/media-report-foundry` | `https://github.com/1openwindow/media-report-foundry` | Imported wrapper example, private, clean/pushed. |
-| `~/repos/pi-foundry-official-invocations` | `https://github.com/1openwindow/pi-foundry-official-invocations` | Official Invocations deployment reference, private, clean/pushed. |
+| `~/repos/media-report-agent` | `https://github.com/1openwindow/media-report-agent` | Example existing Pi agent with azd-native adapter, private, clean/pushed. |
+| `~/repos/media-report-foundry` | `https://github.com/1openwindow/media-report-foundry` | Legacy/internal wrapper validation, private. Not user-facing. |
+| `~/repos/pi-foundry-official-invocations` | `https://github.com/1openwindow/pi-foundry-official-invocations` | Historical official Invocations deployment reference, private. |
 
 ## Known-good deployed agents
 
-### `media-report-foundry`
+### `media-report-agent`
 
 ```text
-Version: 1
+Version: 3
 Protocol: invocations
-Purpose: Demonstrates importing an existing Pi agent with edge-tts/hyperframes into the template.
+Purpose: Demonstrates the azd-native in-repo adapter path from the original Pi agent repo.
 ```
 
 Known-good commands:
 
 ```bash
-cd ~/repos/media-report-foundry
-azd ai agent invoke media-report-foundry \
+cd ~/repos/media-report-agent
+node .azd/pi-foundry/doctor.mjs
+azd ai agent invoke media-report-agent \
   --protocol invocations \
-  --version 1 \
+  --version 3 \
   --new-session \
-  --timeout 600 \
+  --timeout 900 \
   'Say exactly: ok'
 
-npm run demo:remote:artifact -- media-report-foundry 1
+~/repos/pi-foundry/scripts/demo-remote-artifact.sh media-report-agent 3
 ```
 
-### `pi-foundry-official-invocations`
+### Historical/internal: `pi-foundry-official-invocations`
 
 ```text
 Version: 3
@@ -120,51 +122,38 @@ src/runtime/artifacts.mjs
 
 ## Main user workflow
 
-Fast path from the template repo:
+From the `pi-foundry` development checkout, install the adapter into an existing Pi agent repo:
 
 ```bash
-npm run create:wrapper -- \
+npm run install:azd-adapter -- \
+  --target <path-to-existing-pi-agent> \
   --name <agent-name> \
-  --target ~/repos/<agent-name> \
-  --from <path-to-existing-pi-agent> \
-  --mode official \
-  --acr <registry>.azurecr.io
+  --acr <registry>.azurecr.io \
+  --runtime-image <registry>.azurecr.io/pi-foundry-runtime:0.1.0 \
+  --dry-run
 
-cd ~/repos/<agent-name>
-npm run copy:azd-env -- \
-  --from ~/repos/pi-foundry \
-  --env <agent-name> \
-  --artifact-prefix <agent-name>
-
-npm run deploy:foundry
-npm run demo:remote:artifact -- <agent-name> <version>
+npm run install:azd-adapter -- \
+  --target <path-to-existing-pi-agent> \
+  --name <agent-name> \
+  --acr <registry>.azurecr.io \
+  --runtime-image <registry>.azurecr.io/pi-foundry-runtime:0.1.0
 ```
 
-Manual path from a fresh wrapper project:
+Then from the existing Pi agent repo:
 
 ```bash
-cp agent.config.example.yaml agent.config.yaml
-npm run configure:agent -- <agent-name> --acr=<registry>.azurecr.io
-npm run import:pi-agent -- <path-to-existing-pi-agent> --dry-run
-npm run import:pi-agent -- <path-to-existing-pi-agent>
-npm run doctor
 azd env new <agent-name>
 azd env set ...
-azd deploy --no-prompt
-npm run grant:artifact-rbac -- <agent-name> <storage-account>
-npm run demo:remote:artifact -- <agent-name> <version>
+node .azd/pi-foundry/doctor.mjs
+azd up
+azd ai agent invoke <agent-name> --protocol invocations --version <version> --new-session --timeout 900 'Say exactly: ok'
 ```
 
-Short checklist:
+Legacy wrapper checklist and walkthrough (internal/historical only):
 
 ```text
-docs/deploy-existing-pi-agent.md
-```
-
-Narrative walkthrough:
-
-```text
-docs/existing-pi-agent-journey.md
+docs/legacy/deploy-existing-pi-agent.md
+docs/legacy/existing-pi-agent-journey.md
 ```
 
 Demo script:
@@ -178,25 +167,22 @@ docs/demo-checklist.md
 Last checked:
 
 ```text
-pi-foundry:                         validate 0 failed, doctor 0 failed
-pi-foundry-official-invocations:    validate 0 failed, doctor 0 failed
-media-report-foundry:               validate 0 failed, doctor 0 failed
-media-report-agent:                 git clean
+pi-foundry:                         validate 0 failed
+media-report-agent:                 adapter doctor 0 failed, git clean
 ```
 
 Expected non-blocking warnings:
 
-- Docker socket permission may be denied in this agent harness; `remoteBuild: true` avoids blocking remote deploys.
-- Main template repo may not have `agent.config.yaml`; users create it from `agent.config.example.yaml`.
-- Some wrapper repos may warn about missing optional `mcp.config.json` depending on imported assets.
+- Docker socket permission may be denied in this agent harness; use ACR remote build for the runtime image when local Docker is unavailable.
+- `azd ai agent doctor` may warn that role assignments could not be listed; this is not blocking when artifact RBAC and artifact URL checks succeed.
 
 ## Important implementation notes
 
-- The official Invocations wrapper supports both non-streaming JSON and streaming SSE.
+- The runtime supports both non-streaming JSON and streaming SSE.
 - Non-streaming `azd ai agent invoke` through official mode now returns backend JSON, not raw SSE lines.
 - Streaming clients still receive `token` and `done` SSE events.
 - Artifact publishing uses Azure Storage Static Website and requires `Storage Blob Data Contributor` for agent identities.
-- Use `npm run grant:artifact-rbac -- <agent-name> <storage-account>` after first deploy when artifact publishing is enabled.
+- The azd-native adapter's postdeploy automation grants artifact RBAC when artifact static-web publishing is enabled.
 
 ## Things intentionally not done yet
 
@@ -212,4 +198,4 @@ Only after this handoff is stable:
 1. Verify `azd ai agent init -m <agent.manifest.yaml>` template experience.
 2. Decide whether to make `Dockerfile.official` the default `Dockerfile` in a future breaking change.
 3. Add contract smoke tests for request shapes: `message`, `input`, `input.message`, `text/plain`, SSE.
-4. Harden official wrapper error/header propagation and process supervision.
+4. Harden official runtime error/header propagation and process supervision.

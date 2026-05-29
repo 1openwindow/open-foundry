@@ -74,9 +74,9 @@ For each invocation, `pi-foundry` creates an artifact directory:
 /files/<yyyy-mm-dd>/<request-id>/
 ```
 
-When a prompt looks like it may generate downloadable files, the wrapper adds a short instruction asking Pi to write generated files into that directory.
+When a prompt looks like it may generate downloadable files, the runtime adds a short instruction asking Pi to write generated files into that directory.
 
-After Pi finishes, the wrapper:
+After Pi finishes, the runtime:
 
 1. scans the artifact directory,
 2. optionally reads `artifact-manifest.json`,

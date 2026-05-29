@@ -57,7 +57,7 @@ Current Node backend shape:
 - Supports JSON responses and SSE (`Accept: text/event-stream` or `?stream=true`)
 - Internally calls `pi --mode rpc` with a session-specific `--session-dir`
 - Uses fixed runtime directories for Docker/Foundry-style execution
-- Supports `PI_MOCK=1` for local wrapper testing without model credentials
+- Supports `PI_MOCK=1` for local runtime testing without model credentials
 
 ## Bring your own Pi agent
 
@@ -77,11 +77,11 @@ This template includes a project skill at `.agents/skills/deploy-pi-agent-to-fou
 
 ```text
 把我这个 Pi agent 部署到 Foundry。
-帮我创建 wrapper 并导入当前 agent 的 skills。
+帮我给当前 repo 加 Foundry 部署。
 帮我检查为什么 artifact demo 失败。
 ```
 
-The skill acts as the UX layer for vibe-coding workflows: it identifies whether the current directory is a template, wrapper, or existing Pi agent; prefers dry-runs before mutating actions; defaults to the azd-native adapter path; and translates failures into concrete next steps. It does not replace the runtime/template layer.
+The skill acts as the UX layer for vibe-coding workflows: it identifies whether the current directory is an existing Pi agent repo or a pi-foundry development checkout; prefers dry-runs before mutating actions; defaults to the azd-native adapter path; and translates failures into concrete next steps. It does not replace the runtime/template layer.
 
 ### Azd-native adapter quickstart
 
@@ -106,35 +106,7 @@ azd up
 
 This path expects a published pi-foundry runtime base image; build it locally with `npm run runtime:build` or remotely with `npm run runtime:acr-build`, then smoke locally with `npm run runtime:smoke` when Docker is available (see [docs/runtime-image.md](./docs/runtime-image.md)). This path has been validated end-to-end with `media-report-agent` v3 using `crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0`.
 
-### Existing Pi agent wrapper quickstart
-
-If you already have a local Pi agent project, for example one with `edge-tts` and `hyperframes` skills, configure the wrapper name and import its common assets into this template:
-
-```bash
-cp agent.config.example.yaml agent.config.yaml
-npm run configure:agent -- media-report-foundry
-npm run import:pi-agent -- ../my-existing-pi-agent --dry-run
-npm run import:pi-agent -- ../my-existing-pi-agent
-npm run doctor
-```
-
-The importer copies common Pi-owned assets such as `.agents/skills/*`, MCP config files, `prompts/`, and `demo-workspace/`. The template-owned runtime files stay in place.
-
-Then configure `azd` environment values for `PI_ARGS`, `PI_OPENAI_*`, and artifact publishing, deploy with `azd deploy --no-prompt`, and invoke the hosted agent through Foundry Invocations. If artifact publishing is enabled for a new Hosted Agent, grant storage write access to its managed identities:
-
-```bash
-npm run grant:artifact-rbac -- media-report-foundry <storage-account>
-```
-
-After deployment, run a remote artifact demo with:
-
-```bash
-AGENT_NAME=media-report-foundry AGENT_VERSION=<version> npm run demo:remote:artifact
-```
-
-See [docs/deploy-existing-pi-agent.md](./docs/deploy-existing-pi-agent.md) for the short deployment checklist and [docs/existing-pi-agent-journey.md](./docs/existing-pi-agent-journey.md) for the full walkthrough.
-
-> Note: [STATUS.md](./STATUS.md) is an internal handoff file for one known-good deployment environment. Template users should follow the generic README/docs and replace placeholders with their own Foundry, model, ACR, and storage values.
+> Note: [STATUS.md](./STATUS.md) is an internal handoff file for known-good deployment environments. Template users should follow the generic README/docs and replace placeholders with their own Foundry, model, ACR, and storage values.
 
 ## Runtime directories
 
@@ -142,7 +114,7 @@ See [docs/deploy-existing-pi-agent.md](./docs/deploy-existing-pi-agent.md) for t
 |---|---|---|
 | `WORKSPACE_DIR` | current working directory; Docker sets `/workspace` | pi working directory |
 | `FILES_DIR` | `$WORKSPACE_DIR/.files`; Docker sets `/files` | generated artifact root served by `/artifacts/<path>` |
-| `STATE_DIR` | `$HOME/.pi-foundry` | wrapper state root |
+| `STATE_DIR` | `$HOME/.pi-foundry` | runtime state root |
 | `SESSIONS_DIR` | `$STATE_DIR/sessions` | per-`sessionId` pi session storage root |
 | `PI_CODING_AGENT_DIR` | `$HOME/.pi/agent`; Docker sets `$STATE_DIR/pi-agent` | pi config/cache/session root |
 | `ENABLE_DIAGNOSTICS` | `0` | Enables `/diagnostics` request handling when set to `1` or `true` |
