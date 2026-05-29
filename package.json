@@ -12,6 +12,7 @@
     "create:wrapper": "node scripts/create-wrapper.mjs",
     "copy:azd-env": "node scripts/copy-azd-env.mjs",
     "deploy:foundry": "node scripts/deploy-foundry.mjs",
+    "install:azd-adapter": "node scripts/install-azd-adapter.mjs",
     "import:pi-agent": "node scripts/import-pi-agent.mjs",
     "grant:artifact-rbac": "node scripts/grant-artifact-rbac.mjs",
     "demo:remote:artifact": "scripts/demo-remote-artifact.sh",
@@ -22,6 +23,9 @@
     "smoke:session": "node scripts/session-smoke.mjs",
     "smoke:sse": "scripts/sse-smoke.sh",
     "docker:build": "scripts/docker-build-local.sh",
+    "runtime:build": "scripts/runtime-image-build.sh",
+    "runtime:acr-build": "node scripts/runtime-image-acr-build.mjs",
+    "runtime:smoke": "scripts/runtime-image-smoke.sh",
     "docker:smoke:mock": "scripts/docker-smoke-mock.sh",
     "docker:smoke:real": "scripts/docker-smoke-real-host-auth.sh"
   },

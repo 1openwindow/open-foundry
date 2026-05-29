@@ -1,10 +1,20 @@
 # pi-foundry
 
-Template and reference implementation for bringing your own Pi agent to Microsoft Foundry Hosted Agents.
+A runtime and azd-native adapter for deploying an existing Pi agent to Microsoft Foundry Hosted Agents.
 
-You bring Pi skills, MCP servers, tools, prompts, model/provider configuration, and environment variables. This template provides the Foundry Invocations bridge, Pi RPC lifecycle, session mapping, streaming, Docker packaging, deployment files, health/readiness endpoints, and artifact delivery.
+You bring Pi skills, MCP servers, tools, prompts, model/provider configuration, and environment variables. `pi-foundry` provides the Foundry Invocations bridge, Pi RPC lifecycle, session mapping, streaming, Docker packaging, health/readiness endpoints, and artifact delivery.
 
-This project started as a proof that `pi` can run on Foundry. It is now being shaped into a reusable **Bring Your Own Pi Agent to Foundry** template. See [docs/byo-pi-agent.md](./docs/byo-pi-agent.md) for the template contract and recommended customization path.
+The primary user experience is now:
+
+```text
+cd my-existing-pi-agent
+# add a thin azd adapter, not a wrapper repo
+azd up
+```
+
+No wrapper repo is required for the default path. The user's existing Pi agent repo remains the source of truth; only deployment configuration is added. The pi-foundry runtime is supplied by a versioned base image instead of vendoring runtime source into the user's repo.
+
+This path has been validated end-to-end with `media-report-agent` v3 using `crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0`. See [docs/azd-native-ux.md](./docs/azd-native-ux.md) for the UX direction and [docs/runtime-image.md](./docs/runtime-image.md) for runtime image build/publish details.
 
 ## Runtime modes
 
@@ -59,16 +69,44 @@ Customize the agent layer:
 - Add third-party credentials such as `GITHUB_TOKEN` or `JIRA_TOKEN` through your deployment environment.
 - Write generated downloadable outputs under the artifact directory and optionally provide `artifact-manifest.json`.
 
-The common path should not require changing `src/server.mjs`, `Dockerfile`, `agent.yaml`, `agent.manifest.yaml`, or `azure.yaml`.
+The common azd-native path should not require changing user business code, skills, prompts, or MCP config. It adds deployment files such as `azure.yaml`, `agent.yaml`, `agent.manifest.yaml`, `.dockerignore`, and `.azd/pi-foundry/*`.
 
-Start from the documented high-level config contract:
+### Agentic onboarding skill
 
-```bash
-cp agent.config.example.yaml agent.config.yaml
-npm run validate
+This template includes a project skill at `.agents/skills/deploy-pi-agent-to-foundry/SKILL.md`. In Pi, users can ask naturally, for example:
+
+```text
+把我这个 Pi agent 部署到 Foundry。
+帮我创建 wrapper 并导入当前 agent 的 skills。
+帮我检查为什么 artifact demo 失败。
 ```
 
-### Existing Pi agent quickstart
+The skill acts as the UX layer for vibe-coding workflows: it identifies whether the current directory is a template, wrapper, or existing Pi agent; prefers dry-runs before mutating actions; defaults to the azd-native adapter path; and translates failures into concrete next steps. It does not replace the runtime/template layer.
+
+### Azd-native adapter quickstart
+
+The default UX is to add deployment configuration to the user's existing Pi agent repo and keep `azd up` as the canonical command. The thin adapter lives under `templates/azd-native/` and can be installed from this development checkout with:
+
+```bash
+cd ~/repos/pi-foundry
+npm run install:azd-adapter -- \
+  --target ~/repos/my-agent \
+  --name my-agent \
+  --acr <registry>.azurecr.io \
+  --dry-run
+```
+
+After review, run without `--dry-run`, configure `azd env` values in the target repo, run the adapter doctor, and use `azd up`:
+
+```bash
+cd ~/repos/my-agent
+node .azd/pi-foundry/doctor.mjs
+azd up
+```
+
+This path expects a published pi-foundry runtime base image; build it locally with `npm run runtime:build` or remotely with `npm run runtime:acr-build`, then smoke locally with `npm run runtime:smoke` when Docker is available (see [docs/runtime-image.md](./docs/runtime-image.md)). This path has been validated end-to-end with `media-report-agent` v3 using `crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0`.
+
+### Existing Pi agent wrapper quickstart
 
 If you already have a local Pi agent project, for example one with `edge-tts` and `hyperframes` skills, configure the wrapper name and import its common assets into this template:
 

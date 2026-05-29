@@ -1,21 +1,29 @@
 # Demo checklist
 
-This checklist demonstrates the end-to-end **Bring Your Own Pi Agent to Foundry** story.
+This checklist demonstrates the end-to-end **Deploy your existing Pi agent to Foundry with azd** story.
+
+Primary story:
+
+```text
+existing Pi agent repo -> thin azd adapter -> runtime base image -> azd up -> Foundry Hosted Agent
+```
+
+No wrapper repo is required for the default path.
 
 ## Repos
 
 | Repo | Purpose |
 |---|---|
-| `~/repos/media-report-agent` | Example existing user-owned Pi agent with `edge-tts`, `hyperframes`, prompts, and MCP config. |
-| `~/repos/media-report-foundry` | Wrapper created from `pi-foundry`, importing `media-report-agent`; deployed as `media-report-foundry`. |
-| `~/repos/pi-foundry` | Main BYO Pi Agent template/runtime. |
-| `~/repos/pi-foundry-official-invocations` | Official Invocations runtime deployment experiment; current recommended deployment architecture reference. |
+| `~/repos/media-report-agent` | Example existing user-owned Pi agent; now also demonstrates the azd-native in-repo adapter path. |
+| `~/repos/pi-foundry` | Runtime source, adapter template, runtime image build scripts, and legacy wrapper flow. |
+| `~/repos/media-report-foundry` | Legacy wrapper example; validates the older self-contained wrapper story. |
+| `~/repos/pi-foundry-official-invocations` | Official Invocations deployment reference. |
 
-## Demo 1: show the existing Pi agent assets
+## Demo 1: show the existing Pi agent repo
 
 ```bash
 cd ~/repos/media-report-agent
-find . -path './.git' -prune -o -maxdepth 4 -type f -print | sort
+find . -path './.git' -prune -o -path './.azure' -prune -o -maxdepth 4 -type f -print | sort
 ```
 
 Expected highlights:
@@ -25,12 +33,143 @@ Expected highlights:
 .agents/skills/hyperframes/SKILL.md
 mcp.config.json
 prompts/narrated-product-update.zh.md
-demo-workspace/sources/q2-product-brief.md
+.azd/pi-foundry/Dockerfile
+.azd/pi-foundry/doctor.mjs
+.azd/pi-foundry/postdeploy.mjs
+azure.yaml
+agent.yaml
+agent.manifest.yaml
 ```
 
-## Demo 2: show wrapper creation workflow from the template
+Message to tell:
 
-Use dry-run from the template repo:
+```text
+The original Pi agent repo is still the source of truth. We added deployment configuration, not a wrapper repo and not runtime source.
+```
+
+## Demo 2: show azd-native adapter installation dry-run
+
+From the runtime/template repo:
+
+```bash
+cd ~/repos/pi-foundry
+npm run install:azd-adapter -- \
+  --target ~/repos/media-report-agent \
+  --name media-report-agent \
+  --acr crce6hg4ngzj3as.azurecr.io \
+  --runtime-image crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0 \
+  --dry-run
+```
+
+Expected:
+
+- shows only deployment files to create/overwrite
+- explicitly says no agent business-code files will be modified
+
+## Demo 3: runtime image remote build
+
+When Docker is unavailable locally, build the runtime image in ACR:
+
+```bash
+cd ~/repos/pi-foundry
+npm run runtime:acr-build -- \
+  --registry crce6hg4ngzj3as.azurecr.io \
+  --image pi-foundry-runtime:0.1.0
+```
+
+Known-good validation:
+
+```text
+Image:  crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0
+Run:    chh
+Status: Succeeded
+Digest: sha256:d2480ca47d4c4e37af69db1f9eca930108fcbabb062a9ade39cc704f6e1e9416
+```
+
+## Demo 4: adapter doctor inside the existing repo
+
+```bash
+cd ~/repos/media-report-agent
+node .azd/pi-foundry/doctor.mjs
+```
+
+Expected:
+
+```text
+pi-foundry adapter doctor: ... 0 failed
+```
+
+Known-good result after validation:
+
+```text
+32 passed, 0 warned, 0 failed
+```
+
+## Demo 5: deploy with azd up from the existing repo
+
+```bash
+cd ~/repos/media-report-agent
+azd up --no-prompt
+```
+
+Expected:
+
+- custom `up` workflow runs
+- package/deploy succeeds
+- postdeploy prints the invoke command
+- no wrapper repo is involved
+
+Known-good remote agent:
+
+```text
+media-report-agent v3
+```
+
+## Demo 6: invoke the azd-native deployed agent
+
+```bash
+cd ~/repos/media-report-agent
+azd ai agent invoke media-report-agent \
+  --protocol invocations \
+  --version 3 \
+  --new-session \
+  --timeout 900 \
+  'Say exactly: ok'
+```
+
+Expected:
+
+```json
+{
+  "output": "ok",
+  "mock": false,
+  "artifacts": []
+}
+```
+
+## Demo 7: artifact demo from azd-native deployed agent
+
+```bash
+cd ~/repos/media-report-agent
+~/repos/pi-foundry/scripts/demo-remote-artifact.sh media-report-agent 3
+```
+
+Expected:
+
+- response contains `Artifacts:` markdown links
+- response contains structured `artifacts` array
+- `index.html` and `script.md` URLs return HTTP 200
+- URLs are under `media-report-agent/<date>/<request-id>/...`
+
+Verify a returned URL:
+
+```bash
+curl --noproxy '*' -I '<index-html-url>'
+```
+
+## Legacy Demo 8: wrapper creation workflow
+
+Use only when demonstrating the older self-contained wrapper story:
 
 ```bash
 cd ~/repos/pi-foundry
@@ -44,28 +183,7 @@ npm run create:wrapper -- \
 npm run validate
 ```
 
-This demonstrates that a user can create a wrapper, configure the agent, switch to official mode, and import common Pi-owned assets with one command.
-
-## Demo 3: validate the imported wrapper project
-
-```bash
-cd ~/repos/media-report-foundry
-npm run validate
-npm run doctor
-```
-
-Expected:
-
-```text
-Validation summary: ... 0 failed
-Doctor summary: ... 0 failed
-```
-
-Docker socket warnings are not blocking when `remoteBuild: true` is enabled.
-
-## Demo 4: invoke the imported wrapper remotely
-
-Known-good remote agent:
+Known-good legacy remote agent:
 
 ```text
 media-report-foundry v1
@@ -83,35 +201,7 @@ azd ai agent invoke media-report-foundry \
   'Say exactly: ok'
 ```
 
-Expected:
-
-```json
-{
-  "output": "ok",
-  "mock": false
-}
-```
-
-## Demo 5: run artifact demo on imported wrapper
-
-```bash
-cd ~/repos/media-report-foundry
-npm run demo:remote:artifact -- media-report-foundry 1
-```
-
-Expected:
-
-- response contains `Artifacts:` markdown links
-- response contains structured `artifacts` array
-- `index.html` URL returns HTTP 200
-
-Verify a returned URL:
-
-```bash
-curl --noproxy '*' -I '<index-html-url>'
-```
-
-## Demo 6: validate official Invocations runtime mode
+## Legacy Demo 9: official Invocations runtime reference
 
 Known-good remote agent:
 
@@ -131,52 +221,12 @@ azd ai agent invoke pi-foundry-official-invocations \
   'Say exactly: ok'
 ```
 
-Expected JSON output:
-
-```json
-{
-  "output": "ok",
-  "mock": false,
-  "artifacts": []
-}
-```
-
-## Demo 7: artifact demo through official Invocations runtime
-
-```bash
-cd ~/repos/pi-foundry-official-invocations
-npm run demo:remote:artifact -- pi-foundry-official-invocations 3
-```
-
-Expected:
-
-- JSON output, not raw SSE lines
-- `index.html` and `script.md` artifacts
-- static website URLs under `pi-foundry-official-invocations/<date>/<request-id>/...`
-
-## Demo 8: local official runtime smoke
-
-```bash
-cd ~/repos/pi-foundry
-npm run smoke:official
-```
-
-Expected:
-
-```text
---- wrapper readiness ---
-{"status":"healthy"}
---- invocation json ---
-{"output":"mock response: Say exactly: ok", ...}
---- invocation stream ---
-data: {"type":"token", ...}
-```
-
 ## Recommended story to tell
 
-1. Start with an existing local Pi agent (`media-report-agent`).
-2. Use `pi-foundry` to configure and import that agent's skills/MCP/prompts.
-3. Deploy the wrapper to Foundry.
-4. Use official Invocations mode for the Foundry-facing protocol host.
-5. Keep Node direct mode for local development/backend/fallback.
+1. Start with the existing local Pi agent (`media-report-agent`).
+2. Add a thin azd adapter in place; do not create a wrapper repo.
+3. Use a versioned pi-foundry runtime base image.
+4. Run `node .azd/pi-foundry/doctor.mjs`.
+5. Deploy with `azd up` from the existing repo.
 6. Show remote invocation and artifact URLs.
+7. Mention wrapper mode only as an advanced/self-contained fallback.

@@ -31,10 +31,13 @@ Complete:
 - Remote real pi invocation works
 - Remote session continuity works
 - Static website artifact publishing works
+- Azd-native in-repo adapter prototype works end-to-end with `media-report-agent` v3
+- Runtime base image built through ACR remote build: `crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0`
 
 Current known-good remote agents:
 
-- `media-report-foundry` version `1`: validates the existing Pi agent import story.
+- `media-report-agent` version `3`: validates the azd-native in-repo adapter story; deployed from the original `~/repos/media-report-agent` repo with `azd up` and no wrapper repo.
+- `media-report-foundry` version `1`: validates the existing Pi agent import/wrapper story.
 - `pi-foundry-official-invocations` version `3`: validates the official `azure-ai-agentserver-invocations` host as the public protocol layer with the Node Pi backend.
 
 Historical known-good agent:

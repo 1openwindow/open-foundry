@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/AgentSchema/refs/heads/main/schemas/v1.0/AgentManifest.yaml
+name: __AGENT_NAME__
+displayName: "__DISPLAY_NAME__"
+description: >
+  Foundry Hosted Agent deployment adapter for an existing Pi agent repo.
+metadata:
+  tags:
+    - AI Agent Hosting
+    - Invocations Protocol
+    - Bring Your Own
+    - pi
+    - azd-native
+template:
+  name: __AGENT_NAME__
+  kind: hosted
+  protocols:
+    - protocol: invocations
+      version: 1.0.0
+  image: "{{CONTAINER_IMAGE}}"
+  environment_variables:
+    - name: PI_ARGS
+      value: "{{PI_ARGS}}"
+    - name: REQUEST_TIMEOUT_MS
+      value: "{{REQUEST_TIMEOUT_MS}}"
+    - name: ENABLE_DIAGNOSTICS
+      value: "{{ENABLE_DIAGNOSTICS}}"
+    - name: PI_MOCK
+      value: "{{PI_MOCK}}"
+    - name: PI_OPENAI_API_KEY
+      value: "{{PI_OPENAI_API_KEY}}"
+    - name: PI_OPENAI_BASE_URL
+      value: "{{PI_OPENAI_BASE_URL}}"
+    - name: PI_OPENAI_MODEL
+      value: "{{PI_OPENAI_MODEL}}"
+    - name: ARTIFACT_PUBLISH_MODE
+      value: "{{ARTIFACT_PUBLISH_MODE}}"
+    - name: ARTIFACT_STORAGE_ACCOUNT
+      value: "{{ARTIFACT_STORAGE_ACCOUNT}}"
+    - name: ARTIFACT_STATIC_WEB_ENDPOINT
+      value: "{{ARTIFACT_STATIC_WEB_ENDPOINT}}"
+    - name: ARTIFACT_STATIC_WEB_CONTAINER
+      value: "{{ARTIFACT_STATIC_WEB_CONTAINER}}"
+    - name: ARTIFACT_BLOB_PREFIX
+      value: "{{ARTIFACT_BLOB_PREFIX}}"
