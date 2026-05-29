@@ -82,7 +82,7 @@ Foundry /invocations
 Files:
 
 ```text
-Dockerfile.official
+Dockerfile
 runtime/official-invocations/main.py
 runtime/official-invocations/entrypoint.sh
 runtime/official-invocations/requirements.txt
@@ -96,22 +96,21 @@ cd ~/repos/pi-foundry
 npm run smoke:official
 ```
 
-### Node direct mode
+### Internal Node backend
 
-Recommended for local development, fast debugging, backend validation, and fallback deployments.
+Useful for backend-only debugging; the Foundry-facing entrypoint is the official SDK host.
 
 ```bash
 cd ~/repos/pi-foundry
-PI_MOCK=1 npm start
+PI_MOCK=1 npm run start:backend
 npm run smoke
-npm run smoke:sse
 ```
 
 Files:
 
 ```text
 Dockerfile
-src/server.mjs
+src/backend.mjs
 src/adapters/pi-rpc.mjs
 src/runtime/artifacts.mjs
 ```
@@ -141,12 +140,7 @@ azd up
 azd ai agent invoke <agent-name> --protocol invocations --version <version> --new-session --timeout 900 'Say exactly: ok'
 ```
 
-Legacy wrapper checklist and walkthrough (internal/historical only):
-
-```text
-docs/legacy/deploy-existing-pi-agent.md
-docs/legacy/existing-pi-agent-journey.md
-```
+The legacy wrapper-repo walkthroughs have been removed; the supported path is the azd-native in-repo adapter.
 
 Demo script:
 
@@ -181,13 +175,13 @@ Expected non-blocking warnings:
 - `/responses` protocol support is intentionally out of scope for now.
 - Generic non-Pi BYO agent adapters are out of scope for this phase.
 - Full official Invocations replacement of the Node backend is out of scope; official mode currently proxies to Node.
-- Official mode is recommended, but Node direct mode remains supported.
+- Official mode is the supported Foundry-facing path; the Node process is an internal backend.
 
 ## Suggested next phase
 
 Only after this handoff is stable:
 
 1. Verify `azd ai agent init -m <agent.manifest.yaml>` template experience.
-2. Decide whether to make `Dockerfile.official` the default `Dockerfile` in a future breaking change.
+2. Continue hardening the official SDK host path and runtime base image.
 3. Add contract smoke tests for request shapes: `message`, `input`, `input.message`, `text/plain`, SSE.
 4. Harden official runtime error/header propagation and process supervision.

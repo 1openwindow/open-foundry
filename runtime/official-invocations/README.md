@@ -1,6 +1,6 @@
-# Experimental official Invocations wrapper
+# Official Invocations wrapper
 
-This experiment evaluates **choice C: hybrid mode**:
+This is the supported Foundry-facing runtime shape:
 
 ```text
 Foundry /invocations
@@ -9,8 +9,7 @@ Foundry /invocations
   -> Pi RPC adapter / artifact manager / BYO Pi workflow
 ```
 
-The goal is to test whether the official protocol-host layer can replace the
-hand-written Node HTTP edge without rewriting the Pi runtime bridge.
+The official protocol-host layer replaces the hand-written Node HTTP edge without rewriting the Pi runtime bridge.
 
 ## What this proves
 
@@ -19,20 +18,17 @@ hand-written Node HTTP edge without rewriting the Pi runtime bridge.
 - SSE `token` / `done` events can be proxied unchanged.
 - Non-streaming clients can receive the backend JSON response unchanged.
 
-## What this does not prove yet
+## Remaining hardening areas
 
-- Production Docker shape.
-- Hosted deployment with two processes.
 - Long-running polling/cancel handlers.
-- Telemetry parity.
-- Artifact publishing in hosted mode.
+- Telemetry parity with the SDK host.
 
 ## Run locally
 
 From the repo root, start the existing Node backend on an internal port:
 
 ```bash
-PORT=18080 PI_MOCK=1 npm start
+PORT=18080 PI_MOCK=1 npm run start:backend
 ```
 
 In another shell, run the official wrapper:
@@ -73,9 +69,9 @@ This starts the Node backend in mock mode, starts the official wrapper, calls
 `/readiness`, then invokes `/invocations` through the official wrapper in both
 non-streaming JSON mode and streaming SSE mode.
 
-## Experimental Docker image
+## Docker image
 
-The experiment includes a standalone Dockerfile that starts both processes:
+The default Dockerfile starts both processes:
 
 1. Node pi-foundry backend on `127.0.0.1:18080`.
 2. Python official invocations host on public port `8088`.
@@ -84,7 +80,7 @@ Build from the repo root:
 
 ```bash
 docker build \
-  -f Dockerfile.official \
+  -f Dockerfile \
   -t pi-foundry-official-invocations:local \
   .
 ```
@@ -118,6 +114,4 @@ curl --noproxy '*' -sS -N \
 
 ## Next decisions
 
-If the Docker image works locally and in Foundry, we can decide whether the
-extra Python host is worth it compared with the current direct Node
-implementation.
+The Docker image is now the default Foundry-facing shape: the official Python host owns the public Invocations protocol and proxies to the internal Node Pi backend.

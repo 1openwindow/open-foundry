@@ -18,11 +18,11 @@ This path has been validated end-to-end with `clean-pi-agent` deployed as `pi-ag
 
 ## Runtime modes
 
-`pi-foundry` now keeps two supported runtime modes:
+`pi-foundry` now uses the official Invocations host as the supported Foundry entrypoint:
 
 ### Official Invocations mode
 
-Recommended for Foundry deployment experiments and future production hardening. The public container port is served by the official Python `azure-ai-agentserver-invocations` host, which proxies to the Node Pi backend on `127.0.0.1:18080`:
+Recommended for Foundry deployment and production hardening. The public container port is served by the official Python `azure-ai-agentserver-invocations` host, which proxies to the Node Pi backend on `127.0.0.1:18080`:
 
 ```text
 Foundry /invocations
@@ -31,22 +31,19 @@ Foundry /invocations
   -> pi --mode rpc
 ```
 
-Use `Dockerfile.official` or the runtime files under `runtime/official-invocations/` for this mode. Validate it locally with:
+Use `Dockerfile` or the runtime files under `runtime/official-invocations/` for this mode. Validate it locally with:
 
 ```bash
-npm run smoke:official
-```
-
-### Node direct mode
-
-Recommended for local development, fast debugging, backend validation, and fallback deployments. The Node server directly exposes `/invocations` and is also the backend used by official mode:
-
-```bash
-PI_MOCK=1 npm start
 npm run smoke
 ```
 
-Current Node backend shape:
+The Node process remains as an internal Pi backend only; it is not the recommended Foundry-facing host. Start it explicitly for backend-only debugging with:
+
+```bash
+PI_MOCK=1 npm run start:backend
+```
+
+Current internal backend shape:
 
 - `GET /health`
 - `GET /readiness`
@@ -131,50 +128,19 @@ Requests may include `cwd`, but it must resolve inside `WORKSPACE_DIR`. Requests
 
 ## Local smoke test without pi/model credentials
 
+The default smoke test starts both processes: the internal Node Pi backend in mock mode and the official Python Invocations host on the public port.
+
 ```bash
 cd ~/repos/pi-foundry
-PI_MOCK=1 npm start
-```
-
-In another shell:
-
-```bash
 npm run smoke
 ```
 
 Expected invocation output contains `mock response: Say exactly: ok`.
 
-## Local smoke test against installed pi
-
-From this machine, with model credentials already configured for pi:
+For backend-only debugging, run the internal Node backend explicitly:
 
 ```bash
-cd ~/repos/pi-foundry
-npm start
-```
-
-The server uses the installed `pi` binary by default. Only set `PI_BIN` when you intentionally want to point at another executable.
-
-Then:
-
-```bash
-npm run smoke
-npm run smoke:sse
-```
-
-If testing with `curl`, bypass local HTTP proxy variables for loopback calls:
-
-```bash
-curl --noproxy '*' -sS http://127.0.0.1:8080/health
-curl --noproxy '*' -sS http://127.0.0.1:8080/invocations \
-  -H 'content-type: application/json' \
-  -d '{"message":"List files in the current directory."}'
-```
-
-Or run:
-
-```bash
-npm run smoke:curl
+PI_MOCK=1 npm run start:backend
 ```
 
 ## Foundry Invocations-compatible local calls
@@ -222,19 +188,13 @@ npm run docker:build
 
 The local build script uses `--network=host`, proxy build args, and `--pull=false`. This works around WSL/Docker daemon proxy issues after the base image exists locally.
 
-Mock container smoke test:
+Runtime base image smoke test:
 
 ```bash
-npm run docker:smoke:mock
+npm run runtime:smoke
 ```
 
-Real pi container smoke test using a temporary copy of the host pi auth/config:
-
-```bash
-npm run docker:smoke:real
-```
-
-Manual mock run:
+Manual full-image mock run:
 
 ```bash
 docker run --rm -p 8080:8088 \
@@ -295,29 +255,16 @@ Generated HTML, MP3, MP4, image, and ZIP artifacts can be published to an Azure 
 
 Remote deployment, invocation, monitoring, and session-continuity commands are documented in [DEPLOY.md](./DEPLOY.md). Use CLI invocation for demos instead of relying on the Foundry Playground chat renderer.
 
-## Session smoke test
+## Session behavior
 
-With a running real server:
-
-```bash
-BASE_URL=http://127.0.0.1:8080 npm run smoke:session
-```
-
-This verifies that the same `sessionId` can recall prior context and a different `sessionId` is isolated.
+The official host forwards `agent_session_id` to the internal backend. The backend maps each session id to an isolated Pi `--session-dir`, so session continuity is preserved behind the SDK host.
 
 ## Notes
 
-This is not yet using the official Python/C# Foundry Invocations protocol library. It implements the relevant Invocations shape directly in Node:
+The Foundry-facing `/invocations` endpoint is served by the official Python `azure-ai-agentserver-invocations` host. The Node process remains an internal backend that handles Pi RPC, session directories, streaming deltas, and artifact publishing.
 
-- `/invocations` endpoint
-- `agent_session_id` query parameter
-- arbitrary JSON or plain-text request body
-- JSON response for simple clients
-- SSE response with `token` and `done` events for streaming clients
-- OpenAPI at `/invocations/docs/openapi.json`
+Next hardening items:
 
-Next steps before Azure deployment:
-
-- validate this Node container with `azd ai agent run` if the tool accepts a non-Python container
-- otherwise wrap this Node service with the official Python `azure-ai-agentserver-invocations` host, or port the gateway to Python
+- keep the official SDK host smoke test and runtime image smoke test green
 - add upload/workspace ingestion if the deployment scenario depends on user-uploaded files
+- improve telemetry and long-running invocation controls around the SDK host

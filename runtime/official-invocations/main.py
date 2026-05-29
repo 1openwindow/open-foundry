@@ -1,14 +1,13 @@
-"""Experimental official Invocations wrapper for pi-foundry.
+"""Official Invocations wrapper for pi-foundry.
 
 This process uses the official azure-ai-agentserver-invocations host for the
-outer /invocations protocol and proxies requests to the existing Node pi-foundry
-runtime. It is intentionally experimental: the goal is to evaluate whether the
-official protocol-host layer can replace our hand-written HTTP edge without
-rewriting the Pi RPC adapter, artifact manager, and BYO Pi workflow.
+outer /invocations protocol and proxies requests to the internal Node pi-foundry
+backend. The official protocol-host layer owns the Foundry-facing HTTP edge while
+reusing the Pi RPC adapter, artifact manager, and BYO Pi workflow.
 
 Run locally with a Node backend in another shell:
 
-    PORT=18080 PI_MOCK=1 npm start
+    PORT=18080 PI_MOCK=1 npm run start:backend
 
 Then run this wrapper:
 

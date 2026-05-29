@@ -4,29 +4,17 @@
   "type": "module",
   "version": "0.0.0",
   "scripts": {
-    "start": "node src/server.mjs",
-    "start:node-direct": "node src/server.mjs",
+    "start:backend": "node src/backend.mjs",
     "validate": "node scripts/validate.mjs",
     "doctor": "node scripts/doctor.mjs",
-    "configure:agent": "node scripts/configure-agent.mjs",
-    "create:wrapper": "node scripts/create-wrapper.mjs",
-    "copy:azd-env": "node scripts/copy-azd-env.mjs",
-    "deploy:foundry": "node scripts/deploy-foundry.mjs",
-    "import:pi-agent": "node scripts/import-pi-agent.mjs",
     "grant:artifact-rbac": "node scripts/grant-artifact-rbac.mjs",
     "demo:remote:artifact": "scripts/demo-remote-artifact.sh",
+    "smoke": "runtime/official-invocations/smoke-local.sh",
     "smoke:official": "runtime/official-invocations/smoke-local.sh",
-    "experiment:official-invocations:smoke": "runtime/official-invocations/smoke-local.sh",
-    "smoke": "node scripts/smoke.mjs",
-    "smoke:curl": "scripts/curl-smoke.sh",
-    "smoke:session": "node scripts/session-smoke.mjs",
-    "smoke:sse": "scripts/sse-smoke.sh",
     "docker:build": "scripts/docker-build-local.sh",
     "runtime:build": "scripts/runtime-image-build.sh",
     "runtime:acr-build": "node scripts/runtime-image-acr-build.mjs",
-    "runtime:smoke": "scripts/runtime-image-smoke.sh",
-    "docker:smoke:mock": "scripts/docker-smoke-mock.sh",
-    "docker:smoke:real": "scripts/docker-smoke-real-host-auth.sh"
+    "runtime:smoke": "scripts/runtime-image-smoke.sh"
   },
   "engines": {
     "node": ">=22.19.0"

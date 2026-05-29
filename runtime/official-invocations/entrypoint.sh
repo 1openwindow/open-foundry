@@ -17,7 +17,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "Starting Node pi-foundry backend on ${NODE_BACKEND_HOST}:${NODE_BACKEND_PORT}"
-PORT="${NODE_BACKEND_PORT}" HOST="${NODE_BACKEND_HOST}" node /app/src/server.mjs &
+PORT="${NODE_BACKEND_PORT}" HOST="${NODE_BACKEND_HOST}" node /app/src/backend.mjs &
 node_pid="$!"
 
 # Wait for the backend before exposing the official host.

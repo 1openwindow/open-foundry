@@ -14,8 +14,8 @@ Run Pi as a Microsoft Foundry Hosted Agent and provide a reusable **Bring Your O
 The current recommended architecture is:
 
 ```text
-Official Invocations mode for Foundry deployment
-Node direct mode for local development, backend validation, and fallback
+Official SDK Invocations host for Foundry deployment
+Internal Node backend for Pi RPC, sessions, streaming, and artifact publishing
 ```
 
 See [docs/handoff.md](./docs/handoff.md) for the current handoff and [docs/demo-checklist.md](./docs/demo-checklist.md) for demo commands.
@@ -24,8 +24,8 @@ See [docs/handoff.md](./docs/handoff.md) for the current handoff and [docs/demo-
 
 Complete:
 
-- Local HTTP server works
-- Local Docker image works
+- Official SDK host + internal Node backend local smoke works
+- Local Docker image uses the official SDK host
 - Foundry Hosted Agent deployment works
 - Invocations protocol shape works
 - Remote real pi invocation works
@@ -42,7 +42,7 @@ Historical/internal validation agents:
 
 - `media-report-foundry` version `1`: validated the old existing Pi agent import/wrapper story. This is no longer user-facing.
 - `pi-foundry-official-invocations` version `3`: validated the official `azure-ai-agentserver-invocations` host as the public protocol layer with the Node Pi backend.
-- `pi-foundry` version `4`/later validated direct Node Invocations mode during the original proof.
+- `pi-foundry` version `4`/later validated the historical direct Node Invocations proof; that deployment path has been removed from the repo.
 
 Artifact static website for the internal deployment:
 
@@ -61,7 +61,7 @@ Root:
 Important files:
 
 ```text
-src/server.mjs              HTTP wrapper and pi RPC bridge
+src/backend.mjs              HTTP wrapper and pi RPC bridge
 Dockerfile                  Hosted Agent container image
 azure.yaml                  azd service config
 agent.yaml                  Hosted Agent definition
@@ -187,19 +187,17 @@ ACR permissions were required for Foundry image pulls. Assigned ACR pull/read ro
 
 ## Known-good commands
 
-Local run:
+Local backend-only run:
 
 ```bash
 cd ~/repos/pi-foundry
-npm start
+PI_MOCK=1 npm run start:backend
 ```
 
 Local smoke:
 
 ```bash
-npm run smoke:curl
-npm run smoke:sse
-npm run smoke:session
+npm run smoke
 ```
 
 Docker build:
@@ -211,14 +209,14 @@ npm run docker:build
 Docker smoke:
 
 ```bash
-npm run docker:smoke:mock
-HOST_PORT=8114 npm run docker:smoke:real
+npm run runtime:smoke
+npm run smoke
 ```
 
-azd local run:
+Official SDK local smoke:
 
 ```bash
-azd ai agent run --no-inspector --port 8120 --start-command 'node src/server.mjs'
+npm run smoke
 ```
 
 Remote deploy:
@@ -281,8 +279,8 @@ This is not a blocker; remote real invocation works.
 - Foundry reserves `FOUNDRY_*` and `AGENT_*` environment variable prefixes. Use `PI_*` names for custom env vars.
 - Foundry requires `GET /readiness` to return HTTP 200.
 - Foundry Hosted Agent internal port convention is `8088`; Dockerfile exposes `8088`.
-- Current implementation is Node.js and directly implements the Invocations shape. It does not use the official Python/C# `azure-ai-agentserver-invocations` SDK.
-- `azd ai agent run` successfully runs the Node server locally, so Node is acceptable for local agent workflow.
+- Current Foundry-facing implementation uses the official Python `azure-ai-agentserver-invocations` SDK.
+- The Node process is retained as the internal Pi backend for RPC lifecycle, sessions, streaming, and artifacts.
 
 ## Known issues / next work
 
@@ -291,5 +289,5 @@ This is not a blocker; remote real invocation works.
 3. `/artifacts/<path>` can serve generated files from `FILES_DIR` locally, but Foundry front door does not expose that route. Remote artifacts are published to Azure Storage Static Website instead.
 4. Upload/workspace ingestion is still not implemented.
 5. No concurrency limits yet.
-6. No explicit output truncation in the HTTP wrapper, though pi tools already truncate their own tool output.
-7. Multiple old remote versions exist. Use version 4 unless newer versions are validated.
+6. No explicit output truncation in the internal backend, though pi tools already truncate their own tool output.
+7. Multiple old remote versions exist; prefer the current azd-native deployment output version.

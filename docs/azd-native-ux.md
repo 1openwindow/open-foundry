@@ -47,10 +47,9 @@ agent.manifest.yaml
 It does **not** add:
 
 ```text
-src/server.mjs
+src/backend.mjs
 runtime/official-invocations/
-scripts/create-wrapper.mjs
-scripts/import-pi-agent.mjs
+legacy wrapper-repo scripts
 ```
 
 ## Current validation status

@@ -17,7 +17,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 cd "${ROOT_DIR}"
-PORT="${NODE_PORT}" PI_MOCK=1 npm start >/tmp/pi-foundry-official-wrapper-node.log 2>&1 &
+PORT="${NODE_PORT}" PI_MOCK=1 npm run start:backend >/tmp/pi-foundry-official-wrapper-node.log 2>&1 &
 node_pid="$!"
 
 PI_FOUNDRY_BACKEND_URL="http://127.0.0.1:${NODE_PORT}" \

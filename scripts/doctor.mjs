@@ -178,25 +178,18 @@ async function checkRepoShape() {
   const requiredFiles = [
     "README.md",
     "Dockerfile",
-    "Dockerfile.official",
+    "Dockerfile.runtime",
     "azure.yaml",
     "agent.yaml",
     "agent.manifest.yaml",
-    "src/server.mjs",
+    "src/backend.mjs",
     "src/adapters/pi-rpc.mjs",
     ".env.example",
     "agent.config.example.yaml",
     "docs/byo-pi-agent.md",
-    "docs/existing-pi-agent-journey.md",
-    "docs/deploy-existing-pi-agent.md",
     "docs/demo-checklist.md",
     "docs/handoff.md",
     "src/runtime/artifacts.mjs",
-    "scripts/configure-agent.mjs",
-    "scripts/create-wrapper.mjs",
-    "scripts/copy-azd-env.mjs",
-    "scripts/deploy-foundry.mjs",
-    "scripts/import-pi-agent.mjs",
     "scripts/grant-artifact-rbac.mjs",
     "scripts/demo-remote-artifact.sh",
     "runtime/official-invocations/README.md",
@@ -236,6 +229,11 @@ async function checkRepoShape() {
   const azureYaml = (await readOptional("azure.yaml")) ?? "";
   if (/remoteBuild:\s*true/.test(azureYaml)) pass("azure.yaml enables docker.remoteBuild");
   else warn("azure.yaml does not enable docker.remoteBuild; local Docker may be required for deployment");
+  if (/startupCommand:\s*runtime\/official-invocations\/entrypoint\.sh/.test(azureYaml) || /startupCommand:\s*\/app\/runtime\/official-invocations\/entrypoint\.sh/.test(azureYaml)) {
+    pass("azure.yaml starts the official Invocations SDK entrypoint");
+  } else {
+    fail("azure.yaml should start runtime/official-invocations/entrypoint.sh, not the internal Node backend directly");
+  }
 }
 
 function checkTools() {

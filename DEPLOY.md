@@ -114,15 +114,13 @@ Do not use custom `FOUNDRY_*` or `AGENT_*` variables. Foundry reserves those pre
 Syntax check:
 
 ```bash
-node --check src/server.mjs
+node --check src/backend.mjs
 ```
 
-Local smoke:
+Local official-host smoke:
 
 ```bash
-npm run smoke:curl
-npm run smoke:sse
-npm run smoke:session
+npm run smoke
 ```
 
 Docker build:
@@ -134,24 +132,10 @@ npm run docker:build
 Docker smoke, mock mode:
 
 ```bash
-npm run docker:smoke:mock
+npm run runtime:smoke
 ```
 
-Docker smoke, real mode:
-
-```bash
-HOST_PORT=8114 npm run docker:smoke:real
-```
-
-## Local azd agent run
-
-Run through the azd Hosted Agent local harness:
-
-```bash
-azd ai agent run --no-inspector --port 8120 --start-command 'node src/server.mjs'
-```
-
-In another shell, invoke the local server through the harness if needed, or use the harness-provided endpoint.
+For real model mode, provide `PI_OPENAI_*` and `PI_ARGS` values to the official host/container and invoke through the public SDK host port.
 
 ## Deploy
 
