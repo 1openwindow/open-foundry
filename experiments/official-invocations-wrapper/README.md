@@ -17,6 +17,7 @@ hand-written Node HTTP edge without rewriting the Pi runtime bridge.
 - The official `InvocationAgentServerHost` can own the outer `/invocations` endpoint.
 - The existing Node runtime can remain the Pi/task backend.
 - SSE `token` / `done` events can be proxied unchanged.
+- Non-streaming clients can receive the backend JSON response unchanged.
 
 ## What this does not prove yet
 
@@ -69,7 +70,8 @@ experiments/official-invocations-wrapper/smoke-local.sh
 ```
 
 This starts the Node backend in mock mode, starts the official wrapper, calls
-`/readiness`, then invokes `/invocations` through the official wrapper.
+`/readiness`, then invokes `/invocations` through the official wrapper in both
+non-streaming JSON mode and streaming SSE mode.
 
 ## Experimental Docker image
 
@@ -95,11 +97,20 @@ docker run --rm -p 8088:8088 \
   pi-foundry-official-invocations:local
 ```
 
-Invoke:
+Invoke non-streaming JSON:
+
+```bash
+curl --noproxy '*' -sS \
+  'http://127.0.0.1:8088/invocations?agent_session_id=docker-exp-json' \
+  -H 'content-type: application/json' \
+  -d '{"message":"Say exactly: ok"}'
+```
+
+Invoke streaming SSE:
 
 ```bash
 curl --noproxy '*' -sS -N \
-  'http://127.0.0.1:8088/invocations?agent_session_id=docker-exp-001' \
+  'http://127.0.0.1:8088/invocations?agent_session_id=docker-exp-stream&stream=true' \
   -H 'content-type: application/json' \
   -H 'accept: text/event-stream' \
   -d '{"message":"Say exactly: ok"}'

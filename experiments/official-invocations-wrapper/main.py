@@ -30,7 +30,7 @@ from urllib.parse import urlencode
 
 import httpx
 from starlette.requests import Request
-from starlette.responses import JSONResponse, StreamingResponse
+from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from azure.ai.agentserver.invocations import InvocationAgentServerHost
 
@@ -54,19 +54,59 @@ async def handle_invoke(request: Request):
     invocation_id = _state_value(request, "invocation_id")
     body = await request.body()
 
-    logger.info("proxy invocation=%s session=%s backend=%s", invocation_id, session_id, BACKEND_URL)
+    accept = request.headers.get("accept", "")
+    wants_stream = "text/event-stream" in accept or request.query_params.get("stream") == "true"
 
-    query = {"stream": "true"}
+    logger.info(
+        "proxy invocation=%s session=%s stream=%s backend=%s",
+        invocation_id,
+        session_id,
+        wants_stream,
+        BACKEND_URL,
+    )
+
+    query = {}
+    if wants_stream:
+        query["stream"] = "true"
     if session_id:
         query["agent_session_id"] = session_id
-    backend_url = f"{BACKEND_URL}/invocations?{urlencode(query)}"
+    backend_url = f"{BACKEND_URL}/invocations"
+    if query:
+        backend_url = f"{backend_url}?{urlencode(query)}"
+
+    timeout = httpx.Timeout(REQUEST_TIMEOUT_SECONDS, connect=30.0)
+
+    if not wants_stream:
+        headers = {
+            "content-type": request.headers.get("content-type", "application/json"),
+            "accept": "application/json",
+        }
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            try:
+                upstream = await client.post(backend_url, content=body, headers=headers)
+            except Exception as error:  # noqa: BLE001 - surface startup/proxy errors as JSON
+                logger.exception("failed to connect to backend")
+                return JSONResponse(
+                    status_code=502,
+                    content={"error": "backend_unavailable", "message": str(error)},
+                )
+
+        content_type = upstream.headers.get("content-type", "application/json")
+        if "application/json" in content_type:
+            try:
+                return JSONResponse(status_code=upstream.status_code, content=upstream.json())
+            except ValueError:
+                pass
+        return Response(
+            content=upstream.content,
+            status_code=upstream.status_code,
+            media_type=content_type.split(";", 1)[0],
+        )
 
     headers = {
         "content-type": request.headers.get("content-type", "application/json"),
         "accept": "text/event-stream",
     }
-
-    timeout = httpx.Timeout(REQUEST_TIMEOUT_SECONDS, connect=30.0)
     client = httpx.AsyncClient(timeout=timeout)
 
     try:

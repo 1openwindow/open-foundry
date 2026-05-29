@@ -37,9 +37,16 @@ echo "--- wrapper readiness ---"
 curl --noproxy '*' -sS "http://127.0.0.1:${WRAPPER_PORT}/readiness"
 echo
 
-echo "--- invocation ---"
+echo "--- invocation json ---"
+curl --noproxy '*' -sS \
+  "http://127.0.0.1:${WRAPPER_PORT}/invocations?agent_session_id=${SESSION_ID}-json" \
+  -H 'content-type: application/json' \
+  -d '{"message":"Say exactly: ok"}'
+echo
+
+echo "--- invocation stream ---"
 curl --noproxy '*' -sS -N \
-  "http://127.0.0.1:${WRAPPER_PORT}/invocations?agent_session_id=${SESSION_ID}" \
+  "http://127.0.0.1:${WRAPPER_PORT}/invocations?agent_session_id=${SESSION_ID}-stream&stream=true" \
   -H 'content-type: application/json' \
   -H 'accept: text/event-stream' \
   -d '{"message":"Say exactly: ok"}'
