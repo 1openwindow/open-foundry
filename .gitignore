@@ -27,3 +27,7 @@ skills-lock.json
 dist/
 build/
 coverage/
+
+# Python cache
+__pycache__/
+*.py[cod]
