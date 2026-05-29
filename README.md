@@ -4,17 +4,19 @@ A runtime and azd-native adapter for deploying an existing Pi agent to Microsoft
 
 You bring Pi skills, MCP servers, tools, prompts, model/provider configuration, and environment variables. `pi-foundry` provides the Foundry Invocations bridge, Pi RPC lifecycle, session mapping, streaming, Docker packaging, health/readiness endpoints, and artifact delivery.
 
-The primary user experience is now:
+The primary user experience is now skill-driven:
 
 ```text
 cd my-existing-pi-agent
-azd init --template <pi-foundry-azd-template> . --environment my-agent
+# In Pi: ask the pi-foundry skill to deploy this agent to Foundry.
+# The skill installs the adapter, creates .azd/pi-foundry/pi-foundry.yaml,
+# configures azd env values, then runs azd up.
 azd up
 ```
 
 No wrapper repo is required for the default path. The user's existing Pi agent repo remains the source of truth; only deployment configuration is added. The pi-foundry runtime is supplied by a versioned base image instead of vendoring runtime source into the user's repo.
 
-This path has been validated end-to-end with `clean-pi-agent` deployed as `pi-agent` v1 using `crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0`. See [docs/azd-native-ux.md](./docs/azd-native-ux.md) for the UX direction and [docs/runtime-image.md](./docs/runtime-image.md) for runtime image build/publish details.
+This path has been validated end-to-end with `clean-pi-agent` deployed as `pi-agent` v1 using `crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0`. See [docs/skill-adapter-design.md](./docs/skill-adapter-design.md) for the skill/adapter relationship, [docs/azd-native-ux.md](./docs/azd-native-ux.md) for the UX direction, and [docs/runtime-image.md](./docs/runtime-image.md) for runtime image build/publish details.
 
 ## Repository layout
 
@@ -24,8 +26,7 @@ The product path is intentionally separated from demo/test agent assets:
 src/                                      Node Pi backend and runtime helpers
 runtime/official-invocations/             Foundry Invocations protocol host wrapper
 Dockerfile.runtime                        reusable pi-foundry runtime base image
-templates/azd-native/                     thin BYO Pi agent adapter template, including optional agent.config.example.yaml
-.agents/skills/deploy-pi-agent-to-foundry/ natural-language onboarding/deploy skill
+.agents/skills/pi-foundry/                natural-language onboarding/deploy skill and canonical adapter bundle
 examples/demo-agent/                      bundled demo/test agent assets
 examples/full-repo-deploy/                legacy full-repo deployment reference
 ```
@@ -82,11 +83,11 @@ Customize the agent layer:
 - Add third-party credentials such as `GITHUB_TOKEN` or `JIRA_TOKEN` through your deployment environment.
 - Write generated downloadable outputs under the artifact directory and optionally provide `artifact-manifest.json`.
 
-The common azd-native path should not require changing user business code, skills, prompts, or MCP config. It adds deployment files such as `azure.yaml`, `agent.yaml`, `agent.manifest.yaml`, `.dockerignore`, `.azd/pi-foundry/*`, and optional `agent.config.example.yaml` for documenting/validating a BYO agent's high-level settings.
+The common azd-native path should not require changing user business code, skills, prompts, or MCP config. It adds a small root footprint (`azure.yaml`, `.dockerignore`) plus isolated adapter files under `.azd/pi-foundry/`. If an existing `azure.yaml` is not pi-foundry-managed, the skill requires explicit confirmation before replacing it and backs it up first. The skill creates the human-facing pi-foundry deployment source of truth at `.azd/pi-foundry/pi-foundry.yaml`; lower-level platform YAML is generated.
 
 ### Agentic onboarding skill
 
-This template includes a project skill at `.agents/skills/deploy-pi-agent-to-foundry/SKILL.md`. In Pi, users can ask naturally, for example:
+This repo includes a project skill at `.agents/skills/pi-foundry/SKILL.md`. In Pi, users can ask naturally, for example:
 
 ```text
 把我这个 Pi agent 部署到 Foundry。
@@ -94,26 +95,20 @@ This template includes a project skill at `.agents/skills/deploy-pi-agent-to-fou
 帮我检查为什么 artifact demo 失败。
 ```
 
-The skill acts as the UX layer for vibe-coding workflows while `azd` remains the deployment engine. Users stay in their existing Pi agent repo and can ask naturally, for example, “deploy this agent to Foundry.” The skill inspects the repo, initializes the adapter with `azd init --template` when needed, helps configure `azd env`, runs the adapter doctor, deploys with `azd up`, and translates failures into concrete next steps. It does not introduce a separate CLI or replace the runtime/template layer.
+The skill acts as the UX/control layer for vibe-coding workflows while `azd` remains the deployment engine. Users stay in their existing Pi agent repo and can ask naturally, for example, “deploy this agent to Foundry.” The skill inspects the repo, installs the adapter bundle, creates `.azd/pi-foundry/pi-foundry.yaml`, helps configure `azd env`, runs the adapter doctor, deploys with `azd up`, and translates failures into concrete next steps. It does not introduce a separate product CLI or wrapper repo.
 
-### Azd-native adapter quickstart
+### Skill-managed adapter quickstart
 
-The default UX is to add deployment configuration to the user's existing Pi agent repo with `azd init --template`, then use `azd up` as the canonical deploy command.
+The default UX is to add deployment configuration to the user's existing Pi agent repo through the pi-foundry skill, then use `azd up` as the canonical deploy command.
 
-From the user's existing Pi agent repo:
+From the user's existing Pi agent repo, ask Pi to deploy the current agent to Foundry. For local development of this repo, the equivalent script entrypoint is:
 
 ```bash
 cd ~/repos/my-agent
-azd init --template <pi-foundry-azd-template> . --environment my-agent
+node ~/repos/pi-foundry/.agents/skills/pi-foundry/scripts/install-adapter.mjs --environment my-agent
 ```
 
-For local development before the template is published as a standalone repo, use the local template path:
-
-```bash
-azd init --template ~/repos/pi-foundry/templates/azd-native . --environment my-agent
-```
-
-Then configure `azd env` values, run the adapter doctor, and deploy. The template's default Hosted Agent name is `pi-agent`; customize `agent.yaml` and `agent.manifest.yaml` after init if you need a different hosted agent name. `agent.yaml` includes a valid placeholder image for schema validation, and `azure.yaml` sets a valid Docker publish image; azd supplies the actual published container image during deployment.
+Then configure `azd env` values, run the adapter doctor, and deploy. The pi-foundry skill infers or asks for the Hosted Agent name, writes `.azd/pi-foundry/pi-foundry.yaml`, and runs `node .azd/pi-foundry/render.mjs`. Generated files include `azure.yaml`, `.azd/pi-foundry/Dockerfile`, and `.azd/pi-foundry/generated/*`; azd supplies the actual published container image during deployment.
 
 ```bash
 azd env set AZURE_CONTAINER_REGISTRY_ENDPOINT '<registry>.azurecr.io'
@@ -124,7 +119,7 @@ azd up
 
 This path expects a published pi-foundry runtime base image; build it locally with `npm run runtime:build` or remotely with `npm run runtime:acr-build`, then smoke locally with `npm run runtime:smoke` when Docker is available (see [docs/runtime-image.md](./docs/runtime-image.md)). This path has been validated end-to-end with `clean-pi-agent` deployed as `pi-agent` v1 using `crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0`.
 
-> Note: [STATUS.md](./STATUS.md) is an internal handoff file for known-good deployment environments. Template users should follow the generic README/docs and replace placeholders with their own Foundry, model, ACR, and storage values.
+> Note: [STATUS.md](./STATUS.md) is an internal handoff file for known-good deployment environments. Users should follow the generic README/docs and replace placeholders with their own Foundry, model, ACR, and storage values.
 
 ## Runtime directories
 

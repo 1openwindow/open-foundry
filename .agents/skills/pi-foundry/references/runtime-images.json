@@ -1,0 +1,10 @@
+{
+  "default": "crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0",
+  "validated": [
+    {
+      "image": "crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0",
+      "digest": "sha256:d2480ca47d4c4e37af69db1f9eca930108fcbabb062a9ade39cc704f6e1e9416",
+      "notes": "Validated internal ACR runtime image for azd-native BYO Pi agent deployment."
+    }
+  ]
+}

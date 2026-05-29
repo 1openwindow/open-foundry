@@ -63,7 +63,7 @@ Important files:
 ```text
 src/backend.mjs              HTTP wrapper and pi RPC bridge
 Dockerfile.runtime           reusable runtime base image
-templates/azd-native/        BYO Pi agent thin adapter template
+.agents/skills/pi-foundry/   BYO Pi agent skill and canonical adapter bundle
 examples/demo-agent/         demo/test agent skills and workspace
 examples/full-repo-deploy/   legacy full-repo deployment reference
 scripts/                    local, Docker, and smoke helpers

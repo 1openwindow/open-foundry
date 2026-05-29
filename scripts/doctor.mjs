@@ -49,6 +49,7 @@ function commandResult(command, args = [], options = {}) {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
         timeout: options.timeout ?? 15000,
+        cwd: options.cwd,
         env: process.env,
       }).trim(),
     };
@@ -189,10 +190,11 @@ async function checkRepoShape() {
     "src/backend.mjs",
     "src/adapters/pi-rpc.mjs",
     ".env.example",
-    "templates/azd-native/agent.config.example.yaml",
+    "docs/reference/agent.config.example.yaml",
     "docs/byo-pi-agent.md",
     "docs/demo-checklist.md",
     "docs/handoff.md",
+    "docs/skill-adapter-design.md",
     "src/runtime/artifacts.mjs",
     "scripts/grant-artifact-rbac.mjs",
     "scripts/demo-remote-artifact.sh",
@@ -201,7 +203,26 @@ async function checkRepoShape() {
     "runtime/official-invocations/requirements.txt",
     "runtime/official-invocations/entrypoint.sh",
     "runtime/official-invocations/smoke-local.sh",
-    ".agents/skills/deploy-pi-agent-to-foundry/SKILL.md",
+    ".agents/skills/pi-foundry/SKILL.md",
+    ".agents/skills/pi-foundry/assets/adapter/README.md",
+    ".agents/skills/pi-foundry/assets/adapter/render.mjs",
+    ".agents/skills/pi-foundry/assets/adapter/doctor.mjs",
+    ".agents/skills/pi-foundry/assets/adapter/postdeploy.mjs",
+    ".agents/skills/pi-foundry/assets/adapter/dockerignore.block",
+    ".agents/skills/pi-foundry/assets/adapter/adapter-manifest.json",
+    ".agents/skills/pi-foundry/scripts/inspect-repo.mjs",
+    ".agents/skills/pi-foundry/scripts/init-adapter.mjs",
+    ".agents/skills/pi-foundry/scripts/update-config.mjs",
+    ".agents/skills/pi-foundry/scripts/merge-dockerignore.mjs",
+    ".agents/skills/pi-foundry/scripts/configure-env.mjs",
+    ".agents/skills/pi-foundry/scripts/smoke-invoke.mjs",
+    ".agents/skills/pi-foundry/scripts/migrate-adapter.mjs",
+    ".agents/skills/pi-foundry/references/vision.md",
+    ".agents/skills/pi-foundry/references/yaml-ownership.md",
+    ".agents/skills/pi-foundry/references/env-vars.md",
+    ".agents/skills/pi-foundry/references/runtime-images.json",
+    ".agents/skills/pi-foundry/references/troubleshooting.md",
+    ".agents/skills/pi-foundry/references/adapter-contract.md",
   ];
 
   for (const file of requiredFiles) {
@@ -212,33 +233,13 @@ async function checkRepoShape() {
   if (compareNodeVersion(process.version, "22.19.0") >= 0) pass(`Node ${process.version} satisfies >=22.19.0`);
   else fail(`Node ${process.version} is too old`, "Expected >=22.19.0");
 
-  const agentYaml = await readOptional("templates/azd-native/agent.yaml");
-  if (agentYaml) {
-    validateResourceTier(agentYaml, "templates/azd-native/agent.yaml");
-    const reserved = extractEnvNames(agentYaml).filter((name) => name.startsWith("AGENT_") || name.startsWith("FOUNDRY_"));
-    if (reserved.length === 0) pass("templates/azd-native/agent.yaml avoids reserved AGENT_* and FOUNDRY_* env vars");
-    else fail(`templates/azd-native/agent.yaml defines reserved env vars: ${reserved.join(", ")}`);
-  }
-
-  const manifest = await readOptional("templates/azd-native/agent.manifest.yaml");
-  if (manifest) {
-    const reserved = extractEnvNames(manifest).filter((name) => name.startsWith("AGENT_") || name.startsWith("FOUNDRY_"));
-    if (reserved.length === 0) pass("templates/azd-native/agent.manifest.yaml avoids reserved AGENT_* and FOUNDRY_* env vars");
-    else fail(`templates/azd-native/agent.manifest.yaml defines reserved env vars: ${reserved.join(", ")}`);
-  }
+  const installSmoke = commandResult("bash", ["-lc", "repo=$PWD; tmp=$(mktemp -d); cd \"$tmp\" && node \"$repo/.agents/skills/pi-foundry/scripts/install-adapter.mjs\" --agent-name hello-world-agent && node .azd/pi-foundry/render.mjs --check"], { timeout: 30000 });
+  if (installSmoke.ok) pass("pi-foundry skill can install adapter assets and render generated YAML");
+  else warn("pi-foundry skill install smoke failed", "Run install-adapter.mjs in a temp repo and inspect output.");
 
   const gitignore = (await readOptional(".gitignore")) ?? "";
   if (/^\.azure\/?$/m.test(gitignore)) pass(".gitignore excludes .azure/");
   else warn(".gitignore should exclude .azure/ because it may contain local azd secrets");
-
-  const azureYaml = (await readOptional("templates/azd-native/azure.yaml")) ?? "";
-  if (/remoteBuild:\s*true/.test(azureYaml)) pass("templates/azd-native/azure.yaml enables docker.remoteBuild");
-  else warn("templates/azd-native/azure.yaml does not enable docker.remoteBuild; local Docker may be required for deployment");
-  if (/startupCommand:\s*runtime\/official-invocations\/entrypoint\.sh/.test(azureYaml) || /startupCommand:\s*\/app\/runtime\/official-invocations\/entrypoint\.sh/.test(azureYaml)) {
-    pass("templates/azd-native/azure.yaml starts the official Invocations SDK entrypoint");
-  } else {
-    fail("templates/azd-native/azure.yaml should start runtime/official-invocations/entrypoint.sh, not the internal Node backend directly");
-  }
 }
 
 function checkTools() {
@@ -279,7 +280,7 @@ async function looksLikeUserAgentRepo() {
   if (await fileExists(".agents/skills")) {
     try {
       const entries = await readdir(".agents/skills", { withFileTypes: true });
-      if (entries.some((entry) => entry.isDirectory() && entry.name !== "deploy-pi-agent-to-foundry")) return true;
+      if (entries.some((entry) => entry.isDirectory() && entry.name !== "pi-foundry")) return true;
     } catch {
       // Ignore unreadable skills directory and fall through to false.
     }
@@ -291,7 +292,7 @@ function checkAgentConfig(values = {}) {
   return readOptional("agent.config.yaml").then(async (configText) => {
     if (!configText) {
       if (await looksLikeUserAgentRepo()) {
-        warn("agent.config.yaml not found", "Copy agent.config.example.yaml to agent.config.yaml when customizing a BYO Pi agent");
+        warn("agent.config.yaml not found", "Optional advanced config reference: docs/reference/agent.config.example.yaml in the pi-foundry repo. The default BYO adapter uses .azd/pi-foundry/pi-foundry.yaml.");
       } else {
         pass("agent.config.yaml check skipped; current repo does not look like a user Pi agent repo");
       }
@@ -302,7 +303,7 @@ function checkAgentConfig(values = {}) {
 
     const runtimeType = yamlScalar(configText, "runtime.type");
     if (runtimeType === "pi-rpc") pass("agent.config.yaml runtime.type is pi-rpc");
-    else warn(`agent.config.yaml runtime.type is ${runtimeType ?? "<unset>"}`, "This template currently supports pi-rpc as the primary path");
+    else warn(`agent.config.yaml runtime.type is ${runtimeType ?? "<unset>"}`, "The pi-foundry BYO adapter currently supports pi-rpc as the primary path");
 
     if (yamlListBlockContains(configText, "runtime.args", "--mode")) pass("agent.config.yaml runtime args include --mode");
     else warn("agent.config.yaml runtime args should include --mode rpc");

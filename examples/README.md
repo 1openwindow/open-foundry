@@ -7,7 +7,6 @@ Core product code lives in:
 - `src/`
 - `runtime/`
 - `Dockerfile.runtime`
-- `templates/azd-native/`
-- `.agents/skills/deploy-pi-agent-to-foundry/`
+- `.agents/skills/pi-foundry/`
 
 Use these examples for demos, smoke tests, and historical full-image deployment references only.

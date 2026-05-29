@@ -1,0 +1,25 @@
+# BEGIN pi-foundry managed block
+# Prevent local secrets, azd state, git history, and build artifacts from being uploaded to remote Docker builds.
+.git
+.azure
+.env
+.env.*
+!.env.example
+node_modules
+npm-debug.log
+.DS_Store
+.files
+.pi-foundry
+dist
+build
+coverage
+__pycache__
+*.py[cod]
+*.pem
+*.key
+*.pfx
+*.crt
+*.log
+.vscode
+.idea
+# END pi-foundry managed block

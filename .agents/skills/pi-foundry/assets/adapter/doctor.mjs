@@ -44,14 +44,20 @@ function envHas(values, name) {
 }
 
 async function main() {
+  const render = commandResult("node", [".azd/pi-foundry/render.mjs"]);
+  if (render.ok) pass("pi-foundry generated YAML rendered");
+  else fail("pi-foundry render failed", "If .azd/pi-foundry/pi-foundry.yaml is missing, initialize/configure this repo with the pi-foundry skill, then rerun doctor.");
+
   const expectedFiles = [
     "azure.yaml",
-    "agent.yaml",
-    "agent.manifest.yaml",
-    "agent.config.example.yaml",
     ".dockerignore",
     ".azd/pi-foundry/Dockerfile",
     ".azd/pi-foundry/README.md",
+    ".azd/pi-foundry/pi-foundry.yaml",
+    ".azd/pi-foundry/pi-foundry.lock.yaml",
+    ".azd/pi-foundry/render.mjs",
+    ".azd/pi-foundry/generated/agent.yaml",
+    ".azd/pi-foundry/generated/agent.manifest.yaml",
   ];
 
   for (const file of expectedFiles) {
@@ -59,8 +65,20 @@ async function main() {
     else fail(`missing ${file}`);
   }
 
+  const configText = await readOptional(".azd/pi-foundry/pi-foundry.yaml");
+  if (configText) {
+    const nameMatch = configText.match(/^\s*name:\s*['"]?([^'"\s]+)['"]?\s*$/m);
+    const agentName = nameMatch?.[1];
+    if (agentName && agentName !== "CHANGE_ME") pass(`pi-foundry agent.name is ${agentName}`);
+    else fail("pi-foundry agent.name is not configured; use the pi-foundry skill to set it before deployment");
+  }
+
   if (await exists(".agents/skills")) pass("found .agents/skills");
   else warn(".agents/skills not found; this may still be valid if skills are provided another way");
+
+  const renderCheck = commandResult("node", [".azd/pi-foundry/render.mjs", "--check"]);
+  if (renderCheck.ok) pass("pi-foundry generated YAML is up to date");
+  else fail("pi-foundry generated YAML is out of date; run node .azd/pi-foundry/render.mjs");
 
   const azureYaml = await readOptional("azure.yaml");
   if (azureYaml) {
@@ -93,13 +111,13 @@ async function main() {
     }
   }
 
-  const agentYaml = await readOptional("agent.yaml");
+  const agentYaml = await readOptional(".azd/pi-foundry/generated/agent.yaml");
   if (agentYaml) {
     const reserved = [...agentYaml.matchAll(/^\s*-\s+name:\s*["']?([^"'\s]+)["']?\s*$/gm)]
       .map((match) => match[1])
       .filter((name) => name.startsWith("AGENT_") || name.startsWith("FOUNDRY_"));
-    if (reserved.length === 0) pass("agent.yaml does not define reserved AGENT_* or FOUNDRY_* env vars");
-    else fail(`agent.yaml defines reserved env vars: ${reserved.join(", ")}`);
+    if (reserved.length === 0) pass("generated agent.yaml does not define reserved AGENT_* or FOUNDRY_* env vars");
+    else fail(`generated agent.yaml defines reserved env vars: ${reserved.join(", ")}`);
   }
 
   const azdVersion = commandResult("azd", ["version"]);

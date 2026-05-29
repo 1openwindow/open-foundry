@@ -1,0 +1,9 @@
+{
+  "adapterVersion": "0.1.0",
+  "files": [
+    "README.md",
+    "render.mjs",
+    "doctor.mjs",
+    "postdeploy.mjs"
+  ]
+}

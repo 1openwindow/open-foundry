@@ -117,17 +117,11 @@ src/runtime/artifacts.mjs
 
 ## Main user workflow
 
-From the existing Pi agent repo, initialize with the azd template:
+From the existing Pi agent repo, install the adapter through the pi-foundry skill. For local development of this repo, the equivalent script entrypoint is:
 
 ```bash
 cd <path-to-existing-pi-agent>
-azd init --template <pi-foundry-azd-template> . --environment <agent-name>
-```
-
-For local development before publishing a standalone template repo:
-
-```bash
-azd init --template ~/repos/pi-foundry/templates/azd-native . --environment <agent-name>
+node ~/repos/pi-foundry/.agents/skills/pi-foundry/scripts/install-adapter.mjs --environment <agent-name>
 ```
 
 Then from the same repo:
@@ -181,7 +175,7 @@ Expected non-blocking warnings:
 
 Only after this handoff is stable:
 
-1. Verify `azd ai agent init -m <agent.manifest.yaml>` template experience.
+1. Verify the skill-managed install path end-to-end from a clean agent repo.
 2. Continue hardening the official SDK host path and runtime base image.
 3. Add contract smoke tests for request shapes: `message`, `input`, `input.message`, `text/plain`, SSE.
 4. Harden official runtime error/header propagation and process supervision.

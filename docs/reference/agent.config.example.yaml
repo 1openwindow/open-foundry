@@ -1,8 +1,8 @@
 # Example high-level configuration for bringing your own Pi agent to Foundry.
 #
-# This file is currently a documented contract for template users. Runtime values
-# are still supplied through azd environment variables and agent.yaml. Future
-# iterations can use this file to generate/validate those lower-level files.
+# This file is a reference for advanced/high-level agent configuration ideas.
+# The default BYO adapter now uses .azd/pi-foundry/pi-foundry.yaml as its
+# deployment source of truth. Runtime secrets are still supplied through azd env.
 
 name: pi-foundry
 displayName: My Pi Agent on Foundry

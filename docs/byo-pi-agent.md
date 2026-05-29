@@ -1,6 +1,6 @@
 # Bring Your Own Pi Agent to Foundry
 
-`pi-foundry` deploys an existing Pi agent repo to Microsoft Foundry Hosted Agents with an azd-native in-repo adapter.
+`pi-foundry` deploys an existing Pi agent repo to Microsoft Foundry Hosted Agents with a skill-managed, azd-compatible in-repo adapter.
 
 You bring Pi skills, MCP servers, tools, prompts, model configuration, and environment variables. `pi-foundry` provides the Foundry Invocations bridge, Pi RPC lifecycle, session mapping, streaming, Docker packaging, health/readiness endpoints, and artifact delivery through a versioned runtime image.
 
@@ -8,6 +8,7 @@ Default UX:
 
 ```text
 cd my-existing-pi-agent
+# In Pi: ask the pi-foundry skill to deploy this agent to Foundry.
 node .azd/pi-foundry/doctor.mjs
 azd up
 ```
@@ -28,10 +29,11 @@ Developer-owned Pi repo
         v
 Thin azd adapter in the same repo
   - azure.yaml
-  - agent.yaml
-  - agent.manifest.yaml
   - .dockerignore
-  - .azd/pi-foundry/Dockerfile
+  - .azd/pi-foundry/pi-foundry.yaml (created by the pi-foundry skill)
+  - .azd/pi-foundry/generated/agent.yaml (generated)
+  - .azd/pi-foundry/generated/agent.manifest.yaml (generated)
+  - .azd/pi-foundry/Dockerfile (generated)
   - .azd/pi-foundry/doctor.mjs
   - .azd/pi-foundry/postdeploy.mjs
         |
@@ -76,42 +78,48 @@ You should not need to edit runtime source for the common path. The runtime live
 
 The adapter only adds deployment configuration to the existing repo.
 
-## Install the azd-native adapter
+## Install the skill-managed adapter
 
-From the existing Pi agent repo, initialize from the pi-foundry azd template:
+From the existing Pi agent repo, ask the pi-foundry skill to deploy the current agent to Foundry. For local development of this repo, the equivalent script entrypoint is:
 
 ```bash
 cd <existing-pi-agent-path>
-azd init --template <pi-foundry-azd-template> . --environment <agent-name>
+node ~/repos/pi-foundry/.agents/skills/pi-foundry/scripts/install-adapter.mjs --environment <agent-name>
 ```
 
-For local development before the template is published as a standalone repo, use the local template path:
+The installer explains and materializes the adapter without creating a wrapper repo. If an existing `azure.yaml` is not pi-foundry-managed, the installer refuses to replace it unless the user explicitly confirms replacement with `--replace-azure`; confirmed replacement is backed up first.
 
-```bash
-azd init --template ~/repos/pi-foundry/templates/azd-native . --environment <agent-name>
-```
-
-`azd init` warns when the current directory is not empty and asks for confirmation before copying template files into the repo.
-
-Files added to the existing Pi agent repo:
+Files installed from the skill adapter bundle:
 
 ```text
 azure.yaml
-agent.yaml
-agent.manifest.yaml
-agent.config.example.yaml
 .dockerignore
-.azd/pi-foundry/Dockerfile
 .azd/pi-foundry/README.md
+.azd/pi-foundry/render.mjs
 .azd/pi-foundry/doctor.mjs
 .azd/pi-foundry/postdeploy.mjs
 ```
 
-The adapter does not modify `.agents/skills/`, prompts, MCP config, demo workspace, or business code. The optional `agent.config.example.yaml` documents high-level BYO agent settings; copy it to `agent.config.yaml` if you want doctor to validate runtime args, skills path, MCP config, model alignment, and artifact settings. The default Hosted Agent name in the template is `pi-agent`; customize `agent.yaml` and `agent.manifest.yaml` after init if you need a different hosted agent name. `agent.yaml` also contains a valid placeholder image (`example.azurecr.io/pi-agent:latest`) for schema validation. `azure.yaml` sets the Docker publish image to `pi-agent:latest`; azd supplies the actual published container image during deployment.
+The pi-foundry skill creates the human-facing deployment config:
+
+```text
+.azd/pi-foundry/pi-foundry.yaml
+```
+
+`render.mjs` materializes generated deployment files before package/deploy:
+
+```text
+.azd/pi-foundry/Dockerfile
+.azd/pi-foundry/pi-foundry.lock.yaml
+.azd/pi-foundry/generated/agent.yaml
+.azd/pi-foundry/generated/agent.manifest.yaml
+```
+
+The adapter does not modify `.agents/skills/`, prompts, MCP config, demo workspace, or business code. The pi-foundry skill infers or asks for the Hosted Agent name, creates `.azd/pi-foundry/pi-foundry.yaml`, and renders generated files. Customize `.azd/pi-foundry/pi-foundry.yaml` after init if you need a different hosted agent name, runtime image, or resource tier, then run `node .azd/pi-foundry/render.mjs`. `azure.yaml`, `.azd/pi-foundry/Dockerfile`, and `.azd/pi-foundry/generated/*` are generated from that source config. Secrets and environment-specific values remain in `azd env`, not YAML.
 
 ## Runtime image
 
-The adapter Dockerfile uses a runtime base image. The current internal validation template defaults to:
+The generated adapter Dockerfile uses a runtime base image. The current internal validation default is:
 
 ```dockerfile
 ARG PI_FOUNDRY_RUNTIME_IMAGE=crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0

@@ -38,9 +38,9 @@ async function readOptional(path) {
   }
 }
 
-function commandResult(command, args = []) {
+function commandResult(command, args = [], options = {}) {
   try {
-    return { ok: true, stdout: execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim() };
+    return { ok: true, stdout: execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], cwd: options.cwd }).trim() };
   } catch {
     return { ok: false, stdout: "" };
   }
@@ -71,14 +71,14 @@ function validateResourceTier(yamlText) {
   const cpuMatch = yamlText.match(/^\s*cpu:\s*["']?([^"'\s]+)["']?\s*$/m);
   const memoryMatch = yamlText.match(/^\s*memory:\s*["']?([^"'\s]+)["']?\s*$/m);
   if (!cpuMatch || !memoryMatch) {
-    fail("template agent.yaml should specify resources.cpu and resources.memory");
+    fail("generated agent.yaml should specify resources.cpu and resources.memory");
     return;
   }
 
   const pair = `${cpuMatch[1]}/${memoryMatch[1]}`;
   const validPairs = new Set(["0.25/0.5Gi", "0.5/1Gi", "1/2Gi", "2/4Gi"]);
-  if (validPairs.has(pair)) pass(`template agent.yaml uses valid Hosted Agent resource tier ${pair}`);
-  else fail(`template agent.yaml uses invalid Hosted Agent resource tier ${pair}; expected one of ${Array.from(validPairs).join(", ")}`);
+  if (validPairs.has(pair)) pass(`generated agent.yaml uses valid Hosted Agent resource tier ${pair}`);
+  else fail(`generated agent.yaml uses invalid Hosted Agent resource tier ${pair}; expected one of ${Array.from(validPairs).join(", ")}`);
 }
 
 async function main() {
@@ -95,12 +95,13 @@ async function main() {
     "examples/full-repo-deploy/agent.manifest.yaml",
     "src/backend.mjs",
     ".env.example",
-    "templates/azd-native/agent.config.example.yaml",
+    "docs/reference/agent.config.example.yaml",
     "docs/byo-pi-agent.md",
     "docs/demo-checklist.md",
     "docs/handoff.md",
     "docs/azd-native-ux.md",
     "docs/runtime-image.md",
+    "docs/skill-adapter-design.md",
     "src/runtime/artifacts.mjs",
     "scripts/runtime-image-build.sh",
     "scripts/runtime-image-acr-build.mjs",
@@ -112,14 +113,26 @@ async function main() {
     "runtime/official-invocations/requirements.txt",
     "runtime/official-invocations/entrypoint.sh",
     "runtime/official-invocations/smoke-local.sh",
-    "templates/azd-native/azure.yaml",
-    "templates/azd-native/agent.yaml",
-    "templates/azd-native/agent.manifest.yaml",
-    "templates/azd-native/.dockerignore",
-    "templates/azd-native/.azd/pi-foundry/Dockerfile",
-    "templates/azd-native/.azd/pi-foundry/doctor.mjs",
-    "templates/azd-native/.azd/pi-foundry/postdeploy.mjs",
-    ".agents/skills/deploy-pi-agent-to-foundry/SKILL.md",
+    ".agents/skills/pi-foundry/SKILL.md",
+    ".agents/skills/pi-foundry/assets/adapter/README.md",
+    ".agents/skills/pi-foundry/assets/adapter/render.mjs",
+    ".agents/skills/pi-foundry/assets/adapter/doctor.mjs",
+    ".agents/skills/pi-foundry/assets/adapter/postdeploy.mjs",
+    ".agents/skills/pi-foundry/assets/adapter/dockerignore.block",
+    ".agents/skills/pi-foundry/assets/adapter/adapter-manifest.json",
+    ".agents/skills/pi-foundry/scripts/inspect-repo.mjs",
+    ".agents/skills/pi-foundry/scripts/init-adapter.mjs",
+    ".agents/skills/pi-foundry/scripts/update-config.mjs",
+    ".agents/skills/pi-foundry/scripts/merge-dockerignore.mjs",
+    ".agents/skills/pi-foundry/scripts/configure-env.mjs",
+    ".agents/skills/pi-foundry/scripts/smoke-invoke.mjs",
+    ".agents/skills/pi-foundry/scripts/migrate-adapter.mjs",
+    ".agents/skills/pi-foundry/references/vision.md",
+    ".agents/skills/pi-foundry/references/yaml-ownership.md",
+    ".agents/skills/pi-foundry/references/env-vars.md",
+    ".agents/skills/pi-foundry/references/runtime-images.json",
+    ".agents/skills/pi-foundry/references/troubleshooting.md",
+    ".agents/skills/pi-foundry/references/adapter-contract.md",
   ];
 
   for (const file of requiredFiles) {
@@ -131,20 +144,9 @@ async function main() {
   if (compareNodeVersion(nodeVersion, "22.19.0") >= 0) pass(`Node ${nodeVersion} satisfies >=22.19.0`);
   else fail(`Node ${nodeVersion} is too old; expected >=22.19.0`);
 
-  const agentYaml = await readOptional("templates/azd-native/agent.yaml");
-  if (agentYaml) {
-    validateResourceTier(agentYaml);
-    const reservedEnvNames = extractEnvNames(agentYaml).filter((name) => name.startsWith("AGENT_") || name.startsWith("FOUNDRY_"));
-    if (reservedEnvNames.length === 0) pass("templates/azd-native/agent.yaml does not define reserved AGENT_* or FOUNDRY_* environment variables");
-    else fail(`templates/azd-native/agent.yaml defines reserved environment variables: ${reservedEnvNames.join(", ")}`);
-  }
-
-  const manifestYaml = await readOptional("templates/azd-native/agent.manifest.yaml");
-  if (manifestYaml) {
-    const reservedEnvNames = extractEnvNames(manifestYaml).filter((name) => name.startsWith("AGENT_") || name.startsWith("FOUNDRY_"));
-    if (reservedEnvNames.length === 0) pass("templates/azd-native/agent.manifest.yaml does not define reserved AGENT_* or FOUNDRY_* environment variables");
-    else fail(`templates/azd-native/agent.manifest.yaml defines reserved environment variables: ${reservedEnvNames.join(", ")}`);
-  }
+  const installSmoke = commandResult("bash", ["-lc", "repo=$PWD; tmp=$(mktemp -d); cd \"$tmp\" && node \"$repo/.agents/skills/pi-foundry/scripts/install-adapter.mjs\" --agent-name hello-world-agent && node .azd/pi-foundry/render.mjs --check"], { cwd: "." });
+  if (installSmoke.ok) pass("pi-foundry skill can install adapter assets and render generated YAML");
+  else fail("pi-foundry skill install smoke failed");
 
   const envExample = await readOptional(".env.example");
   if (envExample) {

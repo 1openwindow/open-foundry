@@ -1,61 +1,76 @@
-# azd-native UX direction
+# Skill-managed azd-compatible UX direction
 
-The next user-facing direction for `pi-foundry` is an **azd-native in-repo adapter**:
+The user-facing direction for `pi-foundry` is a **skill-managed, azd-compatible in-repo adapter**:
 
 ```text
-Deploy your existing Pi agent to Foundry with azd.
+Deploy your existing Pi agent to Foundry through the pi-foundry skill.
 No wrapper repo. No runtime vendoring. No changes to agent business code.
 ```
 
 ## Why
 
-Developers expect to stay inside their own repo and run the platform's deployment workflow:
+Developers working in vibe-coding flows expect to stay inside their own repo and ask for the outcome:
 
-```bash
-cd my-agent
-azd init --template <pi-foundry-azd-template> .
-azd up
+```text
+"Deploy this Pi agent to Foundry."
 ```
+
+They should not need to reason about an azd template, generated Dockerfiles, or Foundry agent YAML.
 
 ## UX vision
 
-`pi-foundry` should become a Foundry deployment adapter for an existing Pi agent repo:
+`pi-foundry` should be a skill-managed Foundry deployment adapter for an existing Pi agent repo:
 
 - the developer stays in their repo
-- `azd` owns the lifecycle
-- `azd up` is the canonical deploy command
-- the adapter overrides the `up` workflow to run the adapter doctor, package, deploy, and postdeploy; it targets an existing Foundry project instead of provisioning new infrastructure
+- the pi-foundry skill owns install/configure/migrate UX
+- `azd` owns environment/package/deploy lifecycle
+- `azd up` remains the canonical deploy command after installation
 - pi-foundry runtime comes from a versioned base image
 - the user's repo only gains deployment configuration
 - user skills/prompts/MCP remain the source of truth in the same repo
 
-## Files added by the adapter
+## File model
 
-The thin adapter adds deployment files only:
+The skill installs deploy-time adapter assets:
 
 ```text
-azure.yaml
-agent.yaml
-agent.manifest.yaml
-agent.config.example.yaml
-.dockerignore
-.azd/pi-foundry/Dockerfile
+.dockerignore                         # pi-foundry managed block merged with existing rules
 .azd/pi-foundry/README.md
+.azd/pi-foundry/render.mjs
 .azd/pi-foundry/doctor.mjs
 .azd/pi-foundry/postdeploy.mjs
 ```
 
-It does **not** add:
+The skill creates the high-level deployment config from user/repo intent:
 
 ```text
-src/backend.mjs
-runtime/official-invocations/
-legacy wrapper-repo scripts
+.azd/pi-foundry/pi-foundry.yaml
+```
+
+`render.mjs` materializes generated deployment files:
+
+```text
+azure.yaml
+.azd/pi-foundry/Dockerfile
+.azd/pi-foundry/pi-foundry.lock.yaml
+.azd/pi-foundry/generated/agent.yaml
+.azd/pi-foundry/generated/agent.manifest.yaml
+```
+
+It does **not** modify user-owned agent assets:
+
+```text
+.agents/skills/
+prompts/
+mcp.config.json
+src/
+package.json
+README.md
 ```
 
 ## Current validation status
 
-Validated on 2026-05-29:
+Previously validated on 2026-05-29 with the earlier azd-template flow:
 
 - Runtime image built with ACR remote build: `crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0`
 - Existing clean Pi agent repo adapted in place: `~/repos/clean-pi-agent`
@@ -63,47 +78,29 @@ Validated on 2026-05-29:
 - Remote invoke succeeded with real model: output `ok`, `mock: false`
 - Artifact demo succeeded and returned static website URLs under `clean-pi-agent/<date>/<request-id>/...`
 
-The key UX result is that the user stayed in the existing Pi agent repo and deployed with `azd up`; no wrapper repo was required.
-
-## Current prototype in this repo
-
-The first prototype lives at:
-
-```text
-templates/azd-native/
-```
-
-It can be initialized into an existing Pi agent repo with `azd init --template`:
+The next validation should exercise the skill-owned installer path:
 
 ```bash
-cd ~/repos/my-agent
-azd init --template ~/repos/pi-foundry/templates/azd-native . --environment my-agent
-```
-
-Then configure environment values from the user's repo:
-
-```bash
-azd env set AZURE_CONTAINER_REGISTRY_ENDPOINT '<registry>.azurecr.io'
-azd env set PI_MOCK 0
-azd env set REQUEST_TIMEOUT_MS 600000
-azd env set 'PI_ARGS=--mode rpc --no-session --provider foundry --model <model>'
-azd env set PI_OPENAI_BASE_URL 'https://<account>.cognitiveservices.azure.com/openai/v1'
-azd env set PI_OPENAI_MODEL '<model>'
-azd env set PI_OPENAI_API_KEY '<secret>'
+cd ~/repos/clean-pi-agent
+node ~/repos/pi-foundry/.agents/skills/pi-foundry/scripts/install-adapter.mjs --environment clean-pi-agent
+# configure azd env values
 node .azd/pi-foundry/doctor.mjs
 azd up
 ```
 
 ## Runtime image requirement
 
-The prototype Dockerfile uses a runtime base image:
+The generated adapter Dockerfile uses a runtime base image:
 
 ```dockerfile
 ARG PI_FOUNDRY_RUNTIME_IMAGE=crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0
 FROM ${PI_FOUNDRY_RUNTIME_IMAGE}
+
+WORKDIR /app
+COPY . /workspace
 ```
 
-Before this flow can be fully production-ready, publish and version the runtime image. The current full template remains the runtime reference implementation. See [runtime-image.md](./runtime-image.md) for build, smoke, and publish commands.
+Before this flow can be production-ready, publish and version the runtime image. See [runtime-image.md](./runtime-image.md) for build, smoke, and publish commands.
 
 ## Future product shape
 
@@ -116,17 +113,18 @@ Recommended artifacts:
    - artifact publishing
    - health/readiness
 
-2. `pi-foundry-azd` thin template
-   - `azure.yaml`
-   - `agent.yaml`
-   - `agent.manifest.yaml`
-   - thin Dockerfile
-   - safe `.dockerignore`
+2. `pi-foundry` skill
+   - adapter installer
+   - config updater
+   - env helper
+   - smoke invoke helper
+   - migration helper
+   - troubleshooting references
 
-3. `@pi-foundry/cli`
+3. `adapter bundle` inside the skill
+   - render
    - doctor
-   - postdeploy / artifact RBAC
-   - smoke invoke helpers
-   - azd workflow entrypoints
+   - postdeploy
+   - dockerignore managed block
 
-The skill should guide users through the azd-native path only.
+The skill should guide users through the skill-managed path only.
