@@ -11,6 +11,7 @@
     "import:pi-agent": "node scripts/import-pi-agent.mjs",
     "grant:artifact-rbac": "node scripts/grant-artifact-rbac.mjs",
     "demo:remote:artifact": "scripts/demo-remote-artifact.sh",
+    "experiment:official-invocations:smoke": "experiments/official-invocations-wrapper/smoke-local.sh",
     "smoke": "node scripts/smoke.mjs",
     "smoke:curl": "scripts/curl-smoke.sh",
     "smoke:session": "node scripts/session-smoke.mjs",
