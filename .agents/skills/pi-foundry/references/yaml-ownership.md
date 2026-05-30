@@ -29,6 +29,7 @@ Adapter directory:
 - `.azd/pi-foundry/render.mjs` — deterministic renderer
 - `.azd/pi-foundry/doctor.mjs` — deterministic checker
 - `.azd/pi-foundry/postdeploy.mjs` — deployment follow-up automation
+- `.azd/pi-foundry/azd-agent.mjs` — azd wrapper that supplies `AGENT_DEFINITION_PATH` for package/deploy
 - `.azd/pi-foundry/generated/*` — generated low-level platform YAML
 
 ## Rules

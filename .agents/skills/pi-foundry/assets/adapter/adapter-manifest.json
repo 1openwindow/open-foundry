@@ -4,6 +4,7 @@
     "README.md",
     "render.mjs",
     "doctor.mjs",
-    "postdeploy.mjs"
+    "postdeploy.mjs",
+    "azd-agent.mjs"
   ]
 }

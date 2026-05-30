@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 function parseArgs(argv) {
   const values = { timeout: "900", message: "Say exactly: ok" };
@@ -34,8 +35,18 @@ function parseEnvValues(text) {
   return values;
 }
 
-function findAgentOutputs(values) {
-  const nameEntry = Object.entries(values).find(([key]) => key.startsWith("AGENT_") && key.endsWith("_NAME"));
+function readConfiguredAgentName() {
+  try {
+    const text = readFileSync(".azd/pi-foundry/pi-foundry.yaml", "utf8");
+    return text.match(/^\s*name:\s*["']?([^"'\s]+)["']?\s*$/m)?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+function findAgentOutputs(values, expectedName) {
+  const entries = Object.entries(values).filter(([key, value]) => key.startsWith("AGENT_") && key.endsWith("_NAME") && (!expectedName || value === expectedName));
+  const nameEntry = entries[0] ?? Object.entries(values).find(([key]) => key.startsWith("AGENT_") && key.endsWith("_NAME"));
   if (!nameEntry) return {};
   const prefix = nameEntry[0].slice(0, -"_NAME".length);
   return {
@@ -46,7 +57,7 @@ function findAgentOutputs(values) {
 
 const args = parseArgs(process.argv.slice(2));
 const env = parseEnvValues(run("azd", ["env", "get-values"]));
-const outputs = findAgentOutputs(env);
+const outputs = findAgentOutputs(env, readConfiguredAgentName());
 const agent = args.agent ?? outputs.name;
 const version = args.version ?? outputs.version;
 

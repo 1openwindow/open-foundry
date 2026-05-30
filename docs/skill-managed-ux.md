@@ -51,15 +51,14 @@ The skill creates the high-level deployment config from user/repo intent:
 
 ```text
 azure.yaml
-agent.yaml
-agent.manifest.yaml
 .azd/pi-foundry/Dockerfile
+.azd/pi-foundry/azd-agent.mjs
 .azd/pi-foundry/pi-foundry.lock.yaml
 .azd/pi-foundry/generated/agent.yaml
 .azd/pi-foundry/generated/agent.manifest.yaml
 ```
 
-Root `agent.yaml` and `agent.manifest.yaml` are generated mirrors required by current azd Hosted Agents package/deploy behavior; `.azd/pi-foundry/pi-foundry.yaml` remains the source of truth.
+Generated agent YAML stays under `.azd/pi-foundry/generated/`. The adapter workflow uses `.azd/pi-foundry/azd-agent.mjs` to pass `AGENT_DEFINITION_PATH` to azd package/deploy, so root `agent.yaml` is not persistently required.
 
 It does **not** modify user-owned agent assets:
 

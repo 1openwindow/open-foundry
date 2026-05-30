@@ -31,13 +31,12 @@ Thin azd adapter in the same repo
   - azure.yaml
   - .dockerignore
   - .azd/pi-foundry/pi-foundry.yaml (created by the pi-foundry skill)
-  - agent.yaml (generated compatibility mirror)
-  - agent.manifest.yaml (generated compatibility mirror)
   - .azd/pi-foundry/generated/agent.yaml (generated)
   - .azd/pi-foundry/generated/agent.manifest.yaml (generated)
   - .azd/pi-foundry/Dockerfile (generated)
   - .azd/pi-foundry/doctor.mjs
   - .azd/pi-foundry/postdeploy.mjs
+  - .azd/pi-foundry/azd-agent.mjs
         |
         v
 Versioned pi-foundry runtime image
@@ -100,6 +99,7 @@ azure.yaml
 .azd/pi-foundry/render.mjs
 .azd/pi-foundry/doctor.mjs
 .azd/pi-foundry/postdeploy.mjs
+.azd/pi-foundry/azd-agent.mjs
 ```
 
 The pi-foundry skill creates the human-facing deployment config:
@@ -111,15 +111,13 @@ The pi-foundry skill creates the human-facing deployment config:
 `render.mjs` materializes generated deployment files before package/deploy:
 
 ```text
-agent.yaml
-agent.manifest.yaml
 .azd/pi-foundry/Dockerfile
 .azd/pi-foundry/pi-foundry.lock.yaml
 .azd/pi-foundry/generated/agent.yaml
 .azd/pi-foundry/generated/agent.manifest.yaml
 ```
 
-The adapter does not modify `.agents/skills/`, prompts, MCP config, demo workspace, or business code. The pi-foundry skill infers or asks for the Hosted Agent name, creates `.azd/pi-foundry/pi-foundry.yaml`, and renders generated files. Customize `.azd/pi-foundry/pi-foundry.yaml` after init if you need a different hosted agent name, runtime image, or resource tier, then run `node .azd/pi-foundry/render.mjs`. `azure.yaml`, root `agent.yaml`/`agent.manifest.yaml`, `.azd/pi-foundry/Dockerfile`, and `.azd/pi-foundry/generated/*` are generated from that source config; the root agent files are compatibility mirrors for current azd Hosted Agents package/deploy behavior. Secrets and environment-specific values remain in `azd env`, not YAML.
+The adapter does not modify `.agents/skills/`, prompts, MCP config, demo workspace, or business code. The pi-foundry skill infers or asks for the Hosted Agent name, creates `.azd/pi-foundry/pi-foundry.yaml`, and renders generated files. Customize `.azd/pi-foundry/pi-foundry.yaml` after init if you need a different hosted agent name, runtime image, or resource tier, then run `node .azd/pi-foundry/render.mjs`. `azure.yaml`, `.azd/pi-foundry/Dockerfile`, and `.azd/pi-foundry/generated/*` are generated from that source config. `.azd/pi-foundry/azd-agent.mjs` supplies `AGENT_DEFINITION_PATH` to azd package/deploy so root `agent.yaml` is not persistently required. Secrets and environment-specific values remain in `azd env`, not YAML.
 
 ## Runtime image
 

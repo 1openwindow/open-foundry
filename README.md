@@ -108,7 +108,7 @@ cd ~/repos/my-agent
 node ~/repos/pi-foundry/.agents/skills/pi-foundry/scripts/install-adapter.mjs --environment my-agent
 ```
 
-Then configure `azd env` values, run the adapter doctor, and deploy. The pi-foundry skill infers or asks for the Hosted Agent name, writes `.azd/pi-foundry/pi-foundry.yaml`, and runs `node .azd/pi-foundry/render.mjs`. Generated files include `azure.yaml`, root `agent.yaml`/`agent.manifest.yaml` compatibility mirrors, `.azd/pi-foundry/Dockerfile`, and `.azd/pi-foundry/generated/*`; azd supplies the actual published container image during deployment. `.azd/pi-foundry/pi-foundry.yaml` remains the source of truth.
+Then configure `azd env` values, run the adapter doctor, and deploy. The pi-foundry skill infers or asks for the Hosted Agent name, writes `.azd/pi-foundry/pi-foundry.yaml`, and runs `node .azd/pi-foundry/render.mjs`. Generated files include `azure.yaml`, `.azd/pi-foundry/Dockerfile`, `.azd/pi-foundry/azd-agent.mjs`, and `.azd/pi-foundry/generated/*`; azd supplies the actual published container image during deployment. `.azd/pi-foundry/pi-foundry.yaml` remains the source of truth, and generated agent YAML stays under `.azd/pi-foundry/generated/`.
 
 ```bash
 azd env set AZURE_CONTAINER_REGISTRY_ENDPOINT '<registry>.azurecr.io'

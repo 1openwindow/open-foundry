@@ -81,7 +81,7 @@ if (!(await exists(".azd/pi-foundry/pi-foundry.yaml"))) throw new Error(".azd/pi
 
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const backupDir = `.azd/pi-foundry/.migrations/${stamp}`;
-const files = ["README.md", "render.mjs", "doctor.mjs", "postdeploy.mjs"];
+const files = ["README.md", "render.mjs", "doctor.mjs", "postdeploy.mjs", "azd-agent.mjs"];
 
 console.log(`Migrating pi-foundry adapter from ${assetDir}`);
 for (const file of files) await copyWithBackup(join(assetDir, file), `.azd/pi-foundry/${file}`, backupDir, args.dryRun);

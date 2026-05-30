@@ -51,11 +51,8 @@ function azdSet(name, value, { secret = false } = {}) {
 const args = parseArgs(process.argv.slice(2));
 
 if (args["env-name"]) {
-  const currentValues = tryRun("azd", ["env", "get-values"]);
-  if (!currentValues) {
-    tryRun("azd", ["env", "new", args["env-name"]]) ?? run("azd", ["env", "select", args["env-name"]]);
-  } else {
-    run("azd", ["env", "select", args["env-name"]]);
+  if (tryRun("azd", ["env", "select", args["env-name"]]) === undefined) {
+    run("azd", ["env", "new", args["env-name"]]);
   }
 }
 

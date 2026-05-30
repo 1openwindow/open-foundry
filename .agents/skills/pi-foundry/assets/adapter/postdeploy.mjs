@@ -5,6 +5,7 @@
 // To update, run the pi-foundry skill migration flow.
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 const STORAGE_BLOB_DATA_CONTRIBUTOR_ROLE_ID = "ba92f5b4-2d11-453d-a403-e96b0029c9fe";
 
@@ -65,8 +66,18 @@ function roleAssignmentGuid(scope, roleDefinitionId, principalId) {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-function findAgentOutputs(values) {
-  const nameEntry = Object.entries(values).find(([key]) => key.startsWith("AGENT_") && key.endsWith("_NAME"));
+function readConfiguredAgentName() {
+  try {
+    const text = readFileSync(".azd/pi-foundry/pi-foundry.yaml", "utf8");
+    return text.match(/^\s*name:\s*["']?([^"'\s]+)["']?\s*$/m)?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+function findAgentOutputs(values, expectedName) {
+  const entries = Object.entries(values).filter(([key, value]) => key.startsWith("AGENT_") && key.endsWith("_NAME") && (!expectedName || value === expectedName));
+  const nameEntry = entries[0] ?? Object.entries(values).find(([key]) => key.startsWith("AGENT_") && key.endsWith("_NAME"));
   if (!nameEntry) return {};
   const prefix = nameEntry[0].slice(0, -"_NAME".length);
   return {
@@ -153,7 +164,7 @@ async function maybeGrantArtifactRbac(values, outputs) {
 async function main() {
   console.log("pi-foundry postdeploy");
   const values = parseEnvValues(command("azd", ["env", "get-values"]));
-  const outputs = findAgentOutputs(values);
+  const outputs = findAgentOutputs(values, readConfiguredAgentName());
 
   if (outputs.name) console.log(`Agent:   ${outputs.name}`);
   if (outputs.version) console.log(`Version: ${outputs.version}`);

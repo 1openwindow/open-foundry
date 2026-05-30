@@ -6,7 +6,7 @@ usage() {
 Usage: scripts/e2e-clean-agent.sh [options]
 
 Runs the pi-foundry clean-agent UX smoke in a temporary copy of a clean Pi agent repo.
-Default mode is local-only: install adapter, render, and validate generated mirrors without deploying.
+Default mode is local-only: install adapter, render, and validate generated agent YAML under .azd/pi-foundry/generated without deploying.
 
 Options:
   --source <path>        Clean Pi agent fixture. Default: ~/repos/clean-pi-agent
@@ -82,13 +82,16 @@ node "$skill_dir/scripts/inspect-repo.mjs"
 echo "== Install adapter =="
 node "$skill_dir/scripts/install-adapter.mjs" --environment "$agent_name" --agent-name "$agent_name"
 
-echo "== Validate generated mirrors =="
-cmp -s agent.yaml .azd/pi-foundry/generated/agent.yaml
-cmp -s agent.manifest.yaml .azd/pi-foundry/generated/agent.manifest.yaml
+echo "== Validate generated adapter files =="
+test ! -e agent.yaml
+test ! -e agent.manifest.yaml
+test -f .azd/pi-foundry/generated/agent.yaml
+test -f .azd/pi-foundry/generated/agent.manifest.yaml
+test -f .azd/pi-foundry/azd-agent.mjs
 node .azd/pi-foundry/render.mjs --check
 
 if [[ $remote -eq 0 ]]; then
-  echo "Local-only E2E passed: adapter install, root mirrors, and render check are valid."
+  echo "Local-only E2E passed: adapter install, generated agent YAML, and render check are valid."
   exit 0
 fi
 
@@ -154,6 +157,10 @@ node .azd/pi-foundry/doctor.mjs
 
 echo "== Deploy =="
 azd up --no-prompt
+# azd-agent.mjs may temporarily materialize root agent files during deploy for
+# current azd extension compatibility, but it should clean them up afterward.
+test ! -e agent.yaml
+test ! -e agent.manifest.yaml
 
 echo "== Show deployed agent =="
 azd ai agent show "$agent_name"

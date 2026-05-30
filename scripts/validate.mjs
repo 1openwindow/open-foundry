@@ -118,6 +118,7 @@ async function main() {
     ".agents/skills/pi-foundry/assets/adapter/render.mjs",
     ".agents/skills/pi-foundry/assets/adapter/doctor.mjs",
     ".agents/skills/pi-foundry/assets/adapter/postdeploy.mjs",
+    ".agents/skills/pi-foundry/assets/adapter/azd-agent.mjs",
     ".agents/skills/pi-foundry/assets/adapter/dockerignore.block",
     ".agents/skills/pi-foundry/assets/adapter/adapter-manifest.json",
     ".agents/skills/pi-foundry/scripts/inspect-repo.mjs",
@@ -150,30 +151,38 @@ async function main() {
     tmp=$(mktemp -d)
     cd "$tmp"
     node "$repo/.agents/skills/pi-foundry/scripts/install-adapter.mjs" --agent-name hello-world-agent
-    cmp -s agent.yaml .azd/pi-foundry/generated/agent.yaml
-    cmp -s agent.manifest.yaml .azd/pi-foundry/generated/agent.manifest.yaml
+    test ! -e agent.yaml
+    test ! -e agent.manifest.yaml
+    test -f .azd/pi-foundry/generated/agent.yaml
+    test -f .azd/pi-foundry/generated/agent.manifest.yaml
+    test -f .azd/pi-foundry/azd-agent.mjs
+    grep -q 'azd-agent.mjs package --all' azure.yaml
+    grep -q 'azd-agent.mjs deploy --all' azure.yaml
+    node .azd/pi-foundry/azd-agent.mjs deploy --help >/dev/null
+    test ! -e agent.yaml
+    test ! -e agent.manifest.yaml
     node .azd/pi-foundry/render.mjs --check
     python3 -c "from pathlib import Path; p=Path('azure.yaml'); p.write_text('\\n'.join(line for line in p.read_text().splitlines() if not line.startswith('#')) + '\\n')"
     node .azd/pi-foundry/render.mjs
     node .azd/pi-foundry/render.mjs --check
   `], { cwd: "." });
-  if (installSmoke.ok) pass("pi-foundry skill can install adapter assets, render root agent mirrors, and recover normalized azure.yaml");
+  if (installSmoke.ok) pass("pi-foundry skill can install adapter assets, keep generated agent YAML under .azd, and recover normalized azure.yaml");
   else fail("pi-foundry skill install smoke failed");
 
-  const rootAgentGuard = commandResult("bash", ["-lc", `
+  const rootAgentPreserve = commandResult("bash", ["-lc", `
     set -euo pipefail
     repo=$PWD
     tmp=$(mktemp -d)
     cd "$tmp"
     printf 'name: existing-user-agent\n' > agent.yaml
-    if node "$repo/.agents/skills/pi-foundry/scripts/install-adapter.mjs" --agent-name hello-world-agent >out.log 2>&1; then
-      cat out.log
-      exit 1
-    fi
-    grep -q 'agent.yaml already exists and is not pi-foundry-generated' out.log
+    node "$repo/.agents/skills/pi-foundry/scripts/install-adapter.mjs" --agent-name hello-world-agent
+    grep -q 'existing-user-agent' agent.yaml
+    node .azd/pi-foundry/azd-agent.mjs deploy --help >/dev/null
+    grep -q 'existing-user-agent' agent.yaml
+    node .azd/pi-foundry/render.mjs --check
   `], { cwd: "." });
-  if (rootAgentGuard.ok) pass("pi-foundry install refuses to overwrite non-generated root agent.yaml");
-  else fail("pi-foundry root agent.yaml overwrite guard failed");
+  if (rootAgentPreserve.ok) pass("pi-foundry install does not overwrite user-owned root agent.yaml");
+  else fail("pi-foundry root agent.yaml preservation check failed");
 
   const envExample = await readOptional(".env.example");
   if (envExample) {

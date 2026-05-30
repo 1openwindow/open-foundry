@@ -100,9 +100,8 @@ Generated files:
 
 ```text
 azure.yaml
-agent.yaml
-agent.manifest.yaml
 .azd/pi-foundry/Dockerfile
+.azd/pi-foundry/azd-agent.mjs
 .azd/pi-foundry/pi-foundry.lock.yaml
 .azd/pi-foundry/generated/agent.yaml
 .azd/pi-foundry/generated/agent.manifest.yaml

@@ -33,11 +33,12 @@ Complete:
 - Static website artifact publishing works
 - Earlier skill/azd-compatible in-repo adapter prototype worked end-to-end with `clean-pi-agent` deployed as `pi-agent` v1
 - Runtime base image built through ACR remote build: `crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0`
-- Current skill-managed adapter install path works end-to-end from a clean `~/repos/clean-pi-agent` repo with direct `azd up --no-prompt`, no wrapper repo, no `AGENT_DEFINITION_PATH` workaround, and no `PI_FOUNDRY_ALLOW_*` workaround.
+- Current skill-managed adapter install path works end-to-end from a clean `~/repos/clean-pi-agent` repo with direct `azd up --no-prompt`, no wrapper repo, and no `PI_FOUNDRY_ALLOW_*` workaround. The latest adapter keeps agent YAML under `.azd/pi-foundry/generated/` and uses `.azd/pi-foundry/azd-agent.mjs` to pass `AGENT_DEFINITION_PATH` during azd package/deploy.
 
 Current known-good remote agent:
 
-- `clean-pi-agent` version `3`: validates the current skill-managed adapter story with generated root `agent.yaml`/`agent.manifest.yaml` compatibility mirrors. Remote invoke returned `ok` with `mock: false`; static website artifact publishing returned HTTP 200 for `index.html`.
+- `clean-pi-agent` version `4`: validates the current skill-managed adapter story with generated agent YAML kept under `.azd/pi-foundry/generated/`. The adapter workflow uses `.azd/pi-foundry/azd-agent.mjs` to pass `AGENT_DEFINITION_PATH` and temporarily materialize root agent files only during `azd deploy`. Remote invoke returned `ok` with `mock: false`; static website artifact publishing returned HTTP 200 for `index.html`.
+- `clean-pi-agent` version `3`: validates the earlier skill-managed adapter story before the root-agent-file cleanup. Remote invoke returned `ok` with `mock: false`; static website artifact publishing returned HTTP 200 for `index.html`.
 - `pi-agent` version `1`: validates the earlier in-repo adapter story; deployed from the clean `~/repos/clean-pi-agent` repo with `azd up` and no wrapper repo.
 
 Historical/internal validation agents:
@@ -270,11 +271,13 @@ azd ai agent doctor --no-prompt
 
 ## Current doctor state
 
-Last checked during the `clean-pi-agent` version 3 E2E:
+Last checked during the `clean-pi-agent` version 4 E2E:
 
 ```text
-pi-foundry adapter doctor: 42 passed, 0 warned, 0 failed
+pi-foundry adapter doctor: 39 passed, 1 warned, 0 failed
 ```
+
+The warning was from `azd ai agent doctor`; adapter checks passed and remote invoke/artifact validation succeeded.
 
 ## Important implementation notes
 
