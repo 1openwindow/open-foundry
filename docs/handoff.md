@@ -1,6 +1,6 @@
 # pi-foundry handoff
 
-Last updated: 2026-05-29
+Last updated: 2026-05-30
 
 ## Summary
 
@@ -23,25 +23,30 @@ No wrapper repo is required for the default path.
 
 ## Known-good deployed agents
 
-### `pi-agent`
+### `clean-pi-agent`
+
+```text
+Version: 6
+Protocol: invocations
+Purpose: Validates the current skill-first natural-language UX from the clean `~/repos/clean-pi-agent` repo.
+```
+
+Known-good properties:
+
+```text
+Direct deploy command: azd up --no-prompt
+Remote invoke: output ok, mock false
+Artifact publishing: static website URL returned HTTP 200
+Persistent root agent.yaml: absent after deployment
+Persistent root agent.manifest.yaml: absent after deployment
+```
+
+### Historical/internal: `pi-agent`
 
 ```text
 Version: 1
 Protocol: invocations
 Purpose: Demonstrates the earlier in-repo adapter validation from the clean `~/repos/clean-pi-agent` repo.
-```
-
-Known-good commands:
-
-```bash
-cd ~/repos/clean-pi-agent
-node .azd/pi-foundry/doctor.mjs
-azd ai agent invoke pi-agent \
-  --protocol invocations \
-  --version 1 \
-  --new-session \
-  --timeout 900 \
-  'Say exactly: ok'
 ```
 
 ### Historical/internal: `pi-foundry-official-invocations`
@@ -127,10 +132,12 @@ node ~/repos/pi-foundry/.agents/skills/pi-foundry/scripts/install-adapter.mjs --
 Then from the same repo:
 
 ```bash
-azd env set AZURE_CONTAINER_REGISTRY_ENDPOINT '<registry>.azurecr.io'
-azd env set ...
+node ~/repos/pi-foundry/.agents/skills/pi-foundry/scripts/configure-env.mjs \
+  --env-name <agent-name> \
+  --agent-name <agent-name> \
+  --from-env-file <existing-local-azd-env-file>
 node .azd/pi-foundry/doctor.mjs
-azd up
+azd up --no-prompt
 azd ai agent invoke <agent-name> --protocol invocations --version <version> --new-session --timeout 900 'Say exactly: ok'
 ```
 
@@ -147,8 +154,8 @@ docs/demo-checklist.md
 Last checked:
 
 ```text
-pi-foundry:                         validate 0 failed
-clean-pi-agent:                    adapter doctor 0 failed
+pi-foundry:      validate 0 failed
+clean-pi-agent: natural-language E2E passed, adapter doctor 0 failed
 ```
 
 Expected non-blocking warnings:

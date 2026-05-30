@@ -73,22 +73,26 @@ README.md
 
 ## Current validation status
 
-Previously validated on 2026-05-29 with the earlier azd-template flow:
+Validated on 2026-05-30 with the skill-owned natural-language flow:
 
-- Runtime image built with ACR remote build: `crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0`
+- Runtime image: `crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0`
 - Existing clean Pi agent repo adapted in place: `~/repos/clean-pi-agent`
-- Hosted Agent deployed with `azd up`: `pi-agent` version `1`
+- Hosted Agent deployed with direct `azd up --no-prompt`: `clean-pi-agent` version `6`
 - Remote invoke succeeded with real model: output `ok`, `mock: false`
-- Artifact demo succeeded and returned static website URLs under `clean-pi-agent/<date>/<request-id>/...`
+- Artifact demo succeeded and returned HTTP 200 static website URLs under the current agent prefix
+- Persistent root `agent.yaml` and `agent.manifest.yaml`: absent after deployment
 
-The next validation should exercise the skill-owned installer path:
+Equivalent script-level flow:
 
 ```bash
 cd ~/repos/clean-pi-agent
-node ~/repos/pi-foundry/.agents/skills/pi-foundry/scripts/install-adapter.mjs --environment clean-pi-agent
-# configure azd env values
+node ~/repos/pi-foundry/.agents/skills/pi-foundry/scripts/install-adapter.mjs --environment clean-pi-agent --agent-name clean-pi-agent
+node ~/repos/pi-foundry/.agents/skills/pi-foundry/scripts/configure-env.mjs \
+  --env-name clean-pi-agent \
+  --agent-name clean-pi-agent \
+  --from-env-file <existing-local-azd-env-file>
 node .azd/pi-foundry/doctor.mjs
-azd up
+azd up --no-prompt
 ```
 
 ## Runtime image requirement

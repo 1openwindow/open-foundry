@@ -16,7 +16,7 @@ azd up
 
 No wrapper repo is required for the default path. The user's existing Pi agent repo remains the source of truth; only deployment configuration is added. The pi-foundry runtime is supplied by a versioned base image instead of vendoring runtime source into the user's repo.
 
-This path has been validated end-to-end with `clean-pi-agent` deployed as `pi-agent` v1 using `crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0`. See [docs/skill-adapter-design.md](./docs/skill-adapter-design.md) for the skill/adapter relationship, [docs/skill-managed-ux.md](./docs/skill-managed-ux.md) for the UX direction, and [docs/runtime-image.md](./docs/runtime-image.md) for runtime image build/publish details.
+This path has been validated end-to-end with `clean-pi-agent` using `crce6hg4ngzj3as.azurecr.io/pi-foundry-runtime:0.1.0`. See [docs/design-convergence.md](./docs/design-convergence.md) for the current converged product/design decisions, [docs/skill-adapter-design.md](./docs/skill-adapter-design.md) for the skill/adapter relationship, [docs/skill-managed-ux.md](./docs/skill-managed-ux.md) for the UX direction, and [docs/runtime-image.md](./docs/runtime-image.md) for runtime image build/publish details.
 
 ## Repository layout
 
