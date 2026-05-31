@@ -1,77 +1,106 @@
 # pi-foundry runtime image
 
-The skill-managed adapter expects a versioned runtime base image. The user's repo should not vendor pi-foundry runtime source; it should use a generated thin Dockerfile:
+`pi-foundry-runtime` is the **versioned contract product** of this repo. The
+skill-managed deployment expects a published runtime image referenced from the
+user repo's thin Dockerfile:
 
 ```dockerfile
-ARG PI_FOUNDRY_RUNTIME_IMAGE=ghcr.io/1openwindow/pi-foundry-runtime:0.1.0
+ARG PI_FOUNDRY_RUNTIME_IMAGE=<acr>.azurecr.io/pi-foundry-runtime:<tag>
 FROM ${PI_FOUNDRY_RUNTIME_IMAGE}
 
 WORKDIR /app
 COPY . /workspace
 ```
 
-## Build locally
+The skill's `bootstrap.mjs` writes that Dockerfile but does **not** ship a
+default image. You publish your own to an ACR your Foundry project can pull
+from.
+
+## What is in the image
+
+`Dockerfile.runtime` includes:
+
+- official `azure-ai-agentserver-invocations` Python host (Foundry-facing)
+- Node Pi backend (`src/backend.mjs`) — internal, on `127.0.0.1:18080`
+- `pi` CLI (`@earendil-works/pi-coding-agent`)
+- `pi-foundry` CLI (`/usr/local/bin/pi-foundry`) wrapping `src/cli.mjs`
+- runtime dependencies (`uv`, `edge-tts`)
+- `/app/src` (contract.mjs, cli.mjs, backend.mjs, adapters, runtime helpers) and `/app/runtime`
+
+It deliberately does **not** include user Pi agent assets (`.agents/skills`,
+prompts, MCP config, workspace). Those come from the user repo and are layered
+into `/workspace` by the thin adapter Dockerfile bootstrapped into that repo.
+
+## Self-describing contract
+
+Inside the image, two commands surface the runtime contract without booting
+the backend:
+
+```bash
+pi-foundry contract    # full env / tier / reserved-prefix contract as JSON
+pi-foundry doctor      # validate current env; exit 1 on missing required vars (redacts secrets)
+pi-foundry version
+```
+
+The contract is the same data structure consumed by `src/backend.mjs` for
+startup fail-fast validation and by `.agents/skills/pi-foundry/references/contract.json`
+for the skill. The skill's JSON is regenerated from `src/contract.mjs` via
+`npm run emit:contract`, so there is one source of truth.
+
+## Build locally (requires Docker)
 
 ```bash
 PI_FOUNDRY_RUNTIME_IMAGE=pi-foundry-runtime:local npm run runtime:build
 ```
 
-## Smoke test locally
+## Smoke locally (requires Docker)
 
 ```bash
 PI_FOUNDRY_RUNTIME_IMAGE=pi-foundry-runtime:local npm run runtime:smoke
 ```
 
-The smoke test runs the runtime container with `PI_MOCK=1`, mounts `examples/demo-agent/demo-workspace` as `/workspace`, checks `/readiness`, and posts a mock invocation.
+The smoke test runs the container with `PI_MOCK=1`, mounts a throwaway
+tempdir as `/workspace` (override with `WORKSPACE=<path>` to point at a real
+agent workspace), polls `/readiness`, and posts a mock invocation.
 
-## Build remotely with ACR
+## Build remotely with ACR (no local Docker required)
 
-When a local Docker daemon is not available, queue an Azure Container Registry remote build using `azd auth`:
+Use `az acr build` directly against this repo and `Dockerfile.runtime`:
 
 ```bash
-npm run runtime:acr-build -- \
-  --registry <registry>.azurecr.io \
-  --image pi-foundry-runtime:0.1.0
+az acr build \
+  --registry <acr> \
+  --image pi-foundry-runtime:<tag> \
+  --file Dockerfile.runtime \
+  .
 ```
 
-The script uploads the current repo as an ACR build context, uses `Dockerfile.runtime`, and queues an ACR Docker build. It requires `AZURE_SUBSCRIPTION_ID` and `AZURE_CONTAINER_REGISTRY_ENDPOINT` in the active `azd` environment, or explicit `--registry`.
-
-Validated build:
-
-```text
-Registry: crce6hg4ngzj3as.azurecr.io
-Image:    pi-foundry-runtime:0.1.0
-Run:      chh
-Digest:   sha256:d2480ca47d4c4e37af69db1f9eca930108fcbabb062a9ade39cc704f6e1e9416
-Status:   Succeeded
-```
+Requires `az login` and AcrPush on the target registry.
 
 ## Publish
 
-Tag the image for the target registry and push it with Docker or your registry tooling:
+Tag and push to the registry your Foundry project can pull from:
 
 ```bash
-PI_FOUNDRY_RUNTIME_IMAGE=ghcr.io/1openwindow/pi-foundry-runtime:0.1.0 npm run runtime:build
-docker push ghcr.io/1openwindow/pi-foundry-runtime:0.1.0
+docker push <acr>.azurecr.io/pi-foundry-runtime:<tag>
 ```
 
-For ACR:
+Or, for a non-ACR registry:
 
 ```bash
-PI_FOUNDRY_RUNTIME_IMAGE=<registry>.azurecr.io/pi-foundry-runtime:0.1.0 npm run runtime:build
-docker push <registry>.azurecr.io/pi-foundry-runtime:0.1.0
+PI_FOUNDRY_RUNTIME_IMAGE=ghcr.io/<org>/pi-foundry-runtime:<tag> npm run runtime:build
+docker push ghcr.io/<org>/pi-foundry-runtime:<tag>
 ```
 
-If users rely on ACR remote builds, make sure their adapter Dockerfile points to a registry image accessible from the remote builder.
+If users will rely on ACR remote builds via `azd up`, make sure the registry
+holding the runtime image is one the Foundry agent identities have `AcrPull`
+on. The skill's `bootstrap.mjs --runtime-image <ref>` is where that reference
+lands; users can change it at any time by editing `Dockerfile`.
 
-## Contents
+## Versioning
 
-`Dockerfile.runtime` includes:
-
-- official `azure-ai-agentserver-invocations` Python host
-- Node Pi backend
-- pi CLI
-- runtime dependencies
-- `/app/src` and `/app/runtime`
-
-It intentionally does not include user-owned Pi agent assets such as `.agents/skills`, prompts, MCP config, or demo workspace. Those come from the user's repo and are copied to `/workspace` by the thin adapter Dockerfile.
+`pi-foundry-runtime:<tag>` is the contract surface. Breaking changes to env
+contracts, SSE shape, or the artifact protocol should bump the tag. The
+skill's `references/contract.json` should be regenerated and the new image
+referenced from `bootstrap.mjs` defaults (currently: user supplies on every
+deploy; no in-skill default).

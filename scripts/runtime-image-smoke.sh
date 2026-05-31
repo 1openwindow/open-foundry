@@ -5,12 +5,23 @@ IMAGE_TAG="${PI_FOUNDRY_RUNTIME_IMAGE:-pi-foundry-runtime:local}"
 HOST_PORT="${HOST_PORT:-8125}"
 CONTAINER_NAME="pi-foundry-runtime-smoke-${HOST_PORT}"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-WORKSPACE="${WORKSPACE:-${ROOT_DIR}/examples/demo-agent/demo-workspace}"
+# A smoke run only needs *some* workspace mount; the content is irrelevant in PI_MOCK mode.
+# Caller may override WORKSPACE to point at a real agent workspace.
+if [[ -z "${WORKSPACE:-}" ]]; then
+  WORKSPACE="$(mktemp -d -t pi-foundry-smoke-ws.XXXXXX)"
+  trap 'rm -rf "${WORKSPACE}"' EXIT
+fi
 
 cleanup() {
   docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 }
-trap cleanup EXIT
+# Stack on top of any trap set above (workspace tmpdir cleanup).
+existing_trap="$(trap -p EXIT | sed -E "s/^trap -- '(.*)' EXIT$/\1/")"
+if [[ -n "${existing_trap}" ]]; then
+  trap "cleanup; ${existing_trap}" EXIT
+else
+  trap cleanup EXIT
+fi
 
 cleanup
 

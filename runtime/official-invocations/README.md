@@ -90,7 +90,7 @@ Run in mock mode:
 ```bash
 docker run --rm -p 8088:8088 \
   -e PI_MOCK=1 \
-  -v "$PWD/examples/demo-agent/demo-workspace:/workspace" \
+  -v "$PWD/path/to/your/agent/workspace:/workspace" \
   pi-foundry-runtime:local
 ```
 

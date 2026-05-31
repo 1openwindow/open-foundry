@@ -1,321 +1,218 @@
-# Deploy pi-foundry
+# Deploy pi-foundry to a Foundry Hosted Agent
 
-This project deploys `pi` as a Microsoft Foundry Hosted Agent using the Invocations protocol.
+This document is a generic, copy-pasteable remote-deploy reference. It assumes
+you already used the pi-foundry skill (or `node <skill>/scripts/bootstrap.mjs`)
+to add the 5 standard files (`Dockerfile`, `azure.yaml`, `agent.yaml`,
+`agent.manifest.yaml`, `.dockerignore`) to your Pi agent repo.
 
-## Current known-good deployment
+Substitute `<placeholders>` with your own values. **No defaults point at any
+maintainer endpoint** — pi-foundry fails fast when required values are missing.
 
-- Agent: `pi-foundry`
-- Version: `4`
-- Protocol: `invocations`
-- Endpoint:
-  `https://zihch-eus2.services.ai.azure.com/api/projects/zihch-eus2/agents/pi-foundry/endpoint/protocols/invocations?api-version=2025-11-15-preview`
-- Playground:
-  `https://ai.azure.com/nextgen/r/F1arwDVUQ0GNakZnSWLqGQ,zihch-test-eus2,,zihch-eus2,zihch-eus2/build/agents/pi-foundry/build?version=4`
-- Artifact static website:
-  `https://pifoundryeus2web.z20.web.core.windows.net/`
+For day-to-day deploys, the recommended interface is the pi-foundry skill; ask
+Pi to deploy the current repo. The commands below are the underlying primitives.
 
 ## Prerequisites
 
-Required local tools:
-
 ```bash
 azd --version
-docker --version
+docker --version          # optional; only needed for local runtime image builds
 node --version
 npm --version
-```
 
-Required azd extension:
+azd extension list        # expect: azure.ai.agents
+azd extension install azure.ai.agents     # if missing
 
-```bash
-azd extension list
-```
-
-Expected extension:
-
-```text
-azure.ai.agents
-```
-
-Install if missing:
-
-```bash
-azd extension install azure.ai.agents
-```
-
-Login:
-
-```bash
 azd auth login
 ```
 
-## Environment
+You also need:
 
-Project root:
+- a Foundry project (subscription, location, project endpoint),
+- an Azure Container Registry your Foundry project can pull from,
+- a published `pi-foundry-runtime` image in that registry (see
+  [docs/runtime-image.md](./docs/runtime-image.md)),
+- a Foundry OpenAI-compatible endpoint, model name, and API key.
 
-```bash
-cd /home/zihch/repos/pi-foundry
-```
+## Configure the azd environment
 
-Current azd environment:
-
-```bash
-azd env select pi-foundry-local
-```
-
-Important environment values:
+The skill's `configure-env.mjs` wraps these commands and never prints secret
+values. The raw commands are:
 
 ```bash
-azd env get-values | sort | rg 'AZURE_|FOUNDRY_PROJECT_ENDPOINT|PI_|ENABLE_DIAGNOSTICS|AGENT_PI_FOUNDRY_VERSION'
-```
+cd <your-pi-agent-repo>
+azd env new <env-name>            # or: azd env select <env-name>
 
-Generated files under `FILES_DIR` are served locally by:
+azd env set AZURE_SUBSCRIPTION_ID '<subscription-id>'
+azd env set AZURE_TENANT_ID       '<tenant-id>'
+azd env set AZURE_LOCATION        '<region>'             # e.g. eastus2
+azd env set FOUNDRY_PROJECT_ENDPOINT          '<https://...>'
+azd env set AZURE_CONTAINER_REGISTRY_ENDPOINT '<acr>.azurecr.io'
 
-```text
-/artifacts/<relative-path-under-FILES_DIR>
-```
-
-The Foundry Hosted Agent front door does not expose that local route. For remote usage, generated artifacts are published to Azure Storage Static Website and returned as clickable links. See [docs/artifacts.md](./docs/artifacts.md).
-
-Expected real-model values:
-
-```bash
-PI_MOCK=0
-PI_ARGS="--mode rpc --no-session --provider foundry --model gpt-5.4-mini"
-PI_OPENAI_BASE_URL="https://zihch-test-wus3-resource.cognitiveservices.azure.com/openai/v1"
-PI_OPENAI_MODEL="gpt-5.4-mini"
-ENABLE_DIAGNOSTICS=0
-```
-
-`PI_OPENAI_API_KEY` is stored in the local azd environment file under `.azure/pi-foundry-local/.env`. Do not commit `.azure/`.
-
-## Configure model credentials
-
-Set or update the current API key:
-
-```bash
-azd env set PI_OPENAI_API_KEY '<api-key>'
-```
-
-Set the real pi model config:
-
-```bash
+# Live model config. Inside the runtime, PI_OPENAI_* is required unless PI_MOCK=1.
 azd env set PI_MOCK 0
-azd env set 'PI_ARGS=--mode rpc --no-session --provider foundry --model gpt-5.4-mini'
-azd env set PI_OPENAI_BASE_URL 'https://zihch-test-wus3-resource.cognitiveservices.azure.com/openai/v1'
-azd env set PI_OPENAI_MODEL 'gpt-5.4-mini'
-azd env set ENABLE_DIAGNOSTICS 0
+azd env set 'PI_ARGS=--mode rpc --no-session --provider foundry --model <model>'
+azd env set PI_OPENAI_BASE_URL '<https://<account>.cognitiveservices.azure.com/openai/v1>'
+azd env set PI_OPENAI_MODEL    '<model>'
+# Pass the secret as KEY=value to avoid azd reparsing leading -- characters:
+azd env set "PI_OPENAI_API_KEY=$PI_OPENAI_API_KEY"
+
+# Optional artifact publishing
+azd env set ARTIFACT_PUBLISH_MODE 'static-web'
+azd env set ARTIFACT_STORAGE_ACCOUNT '<storage-account>'
+azd env set ARTIFACT_STATIC_WEB_ENDPOINT '<https://<account>.z<n>.web.core.windows.net>'
+azd env set "ARTIFACT_STATIC_WEB_CONTAINER='\$web'"
+azd env set ARTIFACT_BLOB_PREFIX '<agent-name>'
 ```
 
-Do not use custom `FOUNDRY_*` or `AGENT_*` variables. Foundry reserves those prefixes for platform use.
+Do **not** introduce custom env vars beginning with `AGENT_` or `FOUNDRY_`
+(except the documented `FOUNDRY_PROJECT_ENDPOINT`). Foundry reserves those
+prefixes and will reject or overwrite them. Use `PI_*` or your own prefixes
+instead.
 
-## Local checks
-
-Syntax check:
+## Local validation before deploy
 
 ```bash
-node --check src/backend.mjs
+# Tests (no Docker, no credentials needed):
+npm test
+
+# Mock-mode backend (no model credentials needed):
+PI_MOCK=1 npm run start:backend
+
+# Local artifact route serving from FILES_DIR:
+mkdir -p .files/demo
+printf '<h1>artifact ok</h1>' > .files/demo/index.html
+curl --noproxy '*' -sS http://127.0.0.1:8080/artifacts/demo/index.html
 ```
 
-Local official-host smoke:
+If you have Docker locally, you can additionally run the runtime image smoke:
 
 ```bash
-npm run smoke
+PI_FOUNDRY_RUNTIME_IMAGE=<acr>.azurecr.io/pi-foundry-runtime:<tag> npm run runtime:smoke
 ```
 
-Docker build:
+Inside the runtime container (or attached to a running one), validate the
+contract by hand:
 
 ```bash
-npm run docker:build
+pi-foundry contract          # full contract JSON, single source of truth
+pi-foundry doctor            # exit 1 + JSON report when required env is missing
+pi-foundry version
 ```
-
-Docker smoke, mock mode:
-
-```bash
-npm run runtime:smoke
-```
-
-For real model mode, provide `PI_OPENAI_*` and `PI_ARGS` values to the official host/container and invoke through the public SDK host port.
 
 ## Deploy
 
-Deploy a new Hosted Agent version:
+```bash
+azd up                       # first-time or full update (provision + deploy)
+azd deploy --no-prompt       # subsequent agent-only redeploys
+```
+
+azd prints the new version, playground URL, and invocations endpoint. After
+deploy, you can read them back from azd env:
 
 ```bash
-azd deploy --no-prompt
+azd env get-values | grep AGENT_
 ```
 
-The command prints the new version, playground URL, and invocations endpoint.
+The Hosted Agent's name, version, and invocations endpoint are exposed under
+`AGENT_<NAME>_NAME`, `AGENT_<NAME>_VERSION`, and
+`AGENT_<NAME>_INVOCATIONS_ENDPOINT`.
 
-After deployment, check the version:
+## Verify
 
 ```bash
-azd env get-values | rg 'AGENT_PI_FOUNDRY_VERSION|AGENT_PI_FOUNDRY_INVOCATIONS_ENDPOINT'
+# Health smoke (uses azd env outputs + agent.yaml automatically):
+node <skill>/scripts/verify.mjs
+
+# Or by hand:
+azd ai agent invoke <agent-name>   --protocol invocations   --version <version>   --new-session   --timeout 600   'Say exactly: ok'
 ```
 
-## Verify remote invocation
+Expected JSON includes `"output": "ok"` and `"mock": false`.
 
-Use the latest deployed version, currently known-good `4`:
+### Session continuity
 
 ```bash
-azd ai agent invoke pi-foundry \
-  --protocol invocations \
-  --version 4 \
-  --new-session \
-  --timeout 600 \
-  'Say exactly: ok'
+azd ai agent invoke <agent-name> --protocol invocations --version <v> --new-session --timeout 600   'Remember this exact word for this session: mango. Reply exactly: remembered'
+
+azd ai agent invoke <agent-name> --protocol invocations --version <v> --timeout 600   'What exact word did I ask you to remember? Reply with only the word.'
+# expected: mango
 ```
 
-Expected output includes:
+### Artifact publishing (when enabled)
 
-```json
-{
-  "output": "ok",
-  "mock": false
-}
-```
-
-## Verify remote artifacts locally before deploy
-
-With a local server running:
+After a successful `azd up`, grant the agent's managed identities Storage Blob
+Data Contributor on the configured storage account:
 
 ```bash
-mkdir -p .files/coding-agent-comparison
-printf '<h1>artifact ok</h1>' > .files/coding-agent-comparison/index.html
-curl --noproxy '*' -sS http://127.0.0.1:8080/artifacts/coding-agent-comparison/index.html
+node <skill>/scripts/grant-artifact-rbac.mjs            # idempotent; safe to re-run
+node <skill>/scripts/grant-artifact-rbac.mjs --dry-run  # preview only
 ```
 
-Expected output:
+Then invoke the agent with a prompt that asks for downloadable output and
+follow the URLs returned in the response's `artifacts` array.
 
-```html
-<h1>artifact ok</h1>
-```
-
-## Verify remote session continuity
-
-Start a new session:
+## Monitor
 
 ```bash
-azd ai agent invoke pi-foundry \
-  --protocol invocations \
-  --version 4 \
-  --new-session \
-  --timeout 600 \
-  'Remember this exact word for this session: mango. Reply exactly: remembered'
+azd ai agent monitor <agent-name> --tail 100 --type console
+azd ai agent show    <agent-name> --output json --no-prompt
+azd ai agent doctor                              --no-prompt
 ```
-
-Then invoke again without `--new-session`:
-
-```bash
-azd ai agent invoke pi-foundry \
-  --protocol invocations \
-  --version 4 \
-  --timeout 600 \
-  'What exact word did I ask you to remember? Reply with only the word.'
-```
-
-Expected output:
-
-```text
-mango
-```
-
-## Monitor logs
-
-Stream recent logs:
-
-```bash
-azd ai agent monitor pi-foundry --tail 100 --type console
-```
-
-Check agent state:
-
-```bash
-azd ai agent show --no-prompt
-```
-
-Run doctor:
-
-```bash
-azd ai agent doctor --no-prompt
-```
-
-Current non-blocking warning:
-
-```text
-Agent identity role assignments: could not list role assignments
-```
-
-Remote invocation works despite this warning.
-
-## Diagnostics
-
-Internal endpoint diagnostics are disabled by default:
-
-```bash
-ENABLE_DIAGNOSTICS=0
-```
-
-Temporarily enable only when debugging Hosted Agent network/model access:
-
-```bash
-azd env set ENABLE_DIAGNOSTICS 1
-azd deploy --no-prompt
-```
-
-Disable again afterward:
-
-```bash
-azd env set ENABLE_DIAGNOSTICS 0
-azd deploy --no-prompt
-```
-
-## Security notes
-
-- `.azure/` contains local azd state and secrets; do not commit it.
-- `azd ai agent show --output json` can print environment variable values, including `PI_OPENAI_API_KEY`; do not paste full output publicly.
-- The API key was provided during development. Rotate it before production or broader sharing.
-- Key Vault is intentionally not used yet.
 
 ## Common failures
 
+### Startup aborted: missing required env
+
+```text
+{"level":"error","message":"PI_OPENAI_API_KEY is required (set it via azd env, or set PI_MOCK=1 for offline mode).", ...}
+{"level":"error","message":"startup_aborted", ...}
+```
+
+The runtime refuses to start without the live triple. Either set
+`PI_OPENAI_API_KEY` / `PI_OPENAI_BASE_URL` / `PI_OPENAI_MODEL`, or set
+`PI_MOCK=1` for an offline smoke run. Re-run `azd deploy --no-prompt` after
+fixing.
+
 ### `No API key found for the selected model`
 
-The remote container does not have `PI_OPENAI_API_KEY`, or `PI_ARGS` points at a provider/model that is not configured.
+`PI_ARGS` points at a provider/model that pi cannot resolve. Make sure
+`PI_OPENAI_MODEL` matches the model in `PI_ARGS` and the key is set.
 
-Check:
+### `Environment variable 'FOUNDRY_*' is reserved` / `'AGENT_*' is reserved`
 
-```bash
-azd env get-values | rg 'PI_OPENAI_API_KEY|PI_ARGS|PI_MOCK'
-```
+You set a custom variable using a reserved prefix. Use `PI_*` or another
+prefix instead.
 
-### `Environment variable 'FOUNDRY_*' is reserved`
+### Remote `fetch failed` to the OpenAI-compatible endpoint
 
-Do not use custom env vars beginning with `FOUNDRY_` or `AGENT_`. Use `PI_OPENAI_*` instead.
-
-### Remote `fetch failed` to `services.ai.azure.com/openai/v1`
-
-The Hosted Agent sandbox failed to reach the project-scoped OpenAI-compatible endpoint:
-
-```text
-https://zihch-test-wus3-resource.services.ai.azure.com/openai/v1
-```
-
-Use the account endpoint instead:
-
-```text
-https://zihch-test-wus3-resource.cognitiveservices.azure.com/openai/v1
-```
+Confirm `PI_OPENAI_BASE_URL` is reachable from the Foundry sandbox. The
+`*.cognitiveservices.azure.com/openai/v1` form generally works; project-scoped
+`*.services.ai.azure.com/openai/v1` may not, depending on your Foundry
+configuration.
 
 ### ACR image pull failures
 
-Ensure Foundry identities have ACR pull/read roles on:
+The Foundry agent identities must have AcrPull on the registry holding your
+runtime image. Use `azd ai agent show <agent-name> --output json` to read
+identity principal IDs, then grant `AcrPull` on the registry resource.
 
-```text
-zihchpifoundry.azurecr.io
-```
+### Artifact URLs 403
 
-Roles used during setup:
+Run `node <skill>/scripts/grant-artifact-rbac.mjs` to grant the deployed
+identities Storage Blob Data Contributor on the artifact storage account.
+RBAC propagation can take ~1 minute.
 
-- `AcrPull`
-- `Container Registry Repository Reader`
+## Security notes
+
+- `.azure/` contains local azd state and may contain secrets. The skill's
+  generated `.dockerignore` excludes it; keep your `.gitignore` doing the same.
+- `azd ai agent show --output json` can print env values including
+  `PI_OPENAI_API_KEY`; do not paste full output publicly.
+- pi-foundry does not currently integrate Key Vault; rotate any keys you set
+  via `azd env set` if they are shared during development.
+
+## See also
+
+- [SKILL.md](./.agents/skills/pi-foundry/SKILL.md) — skill contract and workflow
+- [docs/runtime-image.md](./docs/runtime-image.md) — building/publishing the runtime image
+- [docs/artifacts.md](./docs/artifacts.md) — artifact publishing details
