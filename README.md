@@ -1,5 +1,7 @@
 # pi-foundry
 
+[![skills.sh](https://skills.sh/b/1openwindow/pi-foundry)](https://skills.sh/1openwindow/pi-foundry)
+
 Deploy an existing Pi agent repo to **Microsoft Foundry Hosted Agents** with a
 minimal, standard `azd` layout.
 
@@ -27,6 +29,19 @@ your-pi-agent-repo/
          Microsoft Foundry Hosted Agents
 ```
 
+## Install the skill
+
+The pi-foundry skill lives at `.agents/skills/pi-foundry/`. Install it into your
+agent (Claude Code, OpenCode, Codex, Cursor, …) with the [skills](https://www.skills.sh) CLI:
+
+```bash
+npx skills add 1openwindow/pi-foundry           # install
+npx skills add 1openwindow/pi-foundry --list     # preview what's in the repo
+```
+
+Then, in an agent session inside your Pi agent repo, just ask it to deploy (see
+Quickstart). You can also run the scripts by hand without installing the skill.
+
 ## Quickstart
 
 In any Pi session inside your Pi agent repo, ask:
@@ -34,12 +49,14 @@ In any Pi session inside your Pi agent repo, ask:
 > 把我这个 Pi agent 部署到 Foundry。
 
 The skill confirms agent name + runtime image, then runs the four primitives
-below. Run them by hand if you prefer:
+below. Run them by hand if you prefer (the example uses the published public
+runtime image so you can try it immediately):
 
 ```bash
 SKILL=path/to/pi-foundry/.agents/skills/pi-foundry
+IMAGE=ghcr.io/1openwindow/pi-foundry-runtime:0.1.0   # public trial image; publish your own for production
 
-node $SKILL/scripts/bootstrap.mjs       --agent-name <name> --runtime-image <acr>/pi-foundry-runtime:<tag>
+node $SKILL/scripts/bootstrap.mjs       --agent-name <name> --runtime-image $IMAGE
 node $SKILL/scripts/configure-env.mjs   --env-name <env> --agent-name <name> --model <model> --base-url <url> --api-key-env PI_OPENAI_API_KEY \
                                         --acr <acr>.azurecr.io --foundry-project-endpoint <url> --azure-subscription-id <sub> --azure-location <region>
 azd deploy
@@ -52,13 +69,14 @@ deploy` needs but are awkward to find by hand — `AZURE_AI_PROJECT_ID` (the
 project's ARM resource id) and `AZURE_TENANT_ID` — from the project endpoint and
 subscription.
 
-You need: `azd` with the `azure.ai.agents` extension, a Foundry project, a
-published `pi-foundry-runtime` image your project can pull, and a Foundry
-OpenAI-compatible endpoint + model + an API key (or keyless managed-identity
-auth via `PI_MODEL_AUTH=managed-identity`).
+You need: `azd` (≥ 1.25.4) with the `azure.ai.agents` extension, a Foundry
+project, a runtime image your project can pull (use the public
+`ghcr.io/1openwindow/pi-foundry-runtime:0.1.0` to try it, or publish your own),
+and a Foundry OpenAI-compatible endpoint + model + an API key (or keyless
+managed-identity auth via `PI_MODEL_AUTH=managed-identity`).
 
-The skill never hardcodes a runtime image, model, or API endpoint — you
-provide them once per deployment.
+The skill ships no model, ACR, or endpoint defaults — you provide those once per
+deployment. The only suggested default is the public runtime image above.
 
 ## Runtime contract
 
