@@ -97,6 +97,41 @@ holding the runtime image is one the Foundry agent identities have `AcrPull`
 on. The skill's `bootstrap.mjs --runtime-image <ref>` is where that reference
 lands; users can change it at any time by editing `Dockerfile`.
 
+## Publish via GitHub Actions (GHCR)
+
+`.github/workflows/runtime-image.yml` builds `Dockerfile.runtime` and pushes to
+`ghcr.io/<owner>/pi-foundry-runtime`. Triggers:
+
+- Push a tag `v<X.Y.Z>` → publishes `:<X.Y.Z>`, `:<X.Y>`, and `:latest`.
+- `workflow_dispatch` → publishes `:sha-<short>` and `:manual-<run-number>` (never `:latest`).
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+**Gotcha — the workflow file must already exist on the default branch before the
+tag push.** GitHub only runs a workflow for a tag if that workflow is present in
+the commit the tag points at *and* reachable from the default branch. If you add
+`runtime-image.yml` on a feature branch and push a tag from there, **no run is
+triggered**. Fix: merge the workflow to `main` first, then (re)create and push
+the tag:
+
+```bash
+git checkout main && git merge --ff-only <branch> && git push origin main
+git tag -d v0.1.0 && git push origin :refs/tags/v0.1.0   # if the tag already existed
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+**Make the package public** so Foundry (or anyone) can pull without auth: GitHub
+→ your profile/org → Packages → `pi-foundry-runtime` → Package settings → Change
+visibility → Public. Verify anonymously:
+
+```bash
+docker logout ghcr.io && docker pull ghcr.io/<owner>/pi-foundry-runtime:<tag>
+```
+
+
 ## Versioning
 
 `pi-foundry-runtime:<tag>` is the contract surface. Breaking changes to env

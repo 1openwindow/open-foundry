@@ -21,7 +21,7 @@ The LLM consults this file when `azd deploy` or `verify.mjs` fails. Match the er
 | `azd ai agent invoke` returns 403 `preview_feature_required` | The CLI does not send `Foundry-Features: HostedAgents=V1Preview`. Use `verify.mjs`, which calls the invocations REST endpoint with that header. |
 | Deploy fails with "image pull unauthorized" | Foundry identities lack ACR pull. Run `azd ai agent doctor --no-prompt` and assign AcrPull on the registry. |
 | Invoke returns "configuration: no foundry provider" or model 401 | `PI_OPENAI_*` not set in azd env, or `PI_ARGS` missing `--provider foundry --model <model>`. Reconfigure via `configure-env.mjs`. |
-| Keyless (`PI_MODEL_AUTH=managed-identity`) invoke returns model 401/403 | The agent's **Instance Identity** lacks a data-plane role on the model account. Grant `Cognitive Services OpenAI User` to the principal from `azd ai agent show <name>` (Instance Identity Principal ID) on the `Microsoft.CognitiveServices/accounts/<account>` scope. |
+| Keyless (`PI_MODEL_AUTH=managed-identity`) invoke returns model 401/403 | The agent's **Instance Identity** lacks a data-plane role on the model account. Run `node <skill>/scripts/grant-model-access.mjs` (grants `Cognitive Services OpenAI User`), then `azd deploy`. |
 | Container fails readiness | `PI_MOCK` not set and `PI_OPENAI_API_KEY` missing → runtime rejects start. Set `PI_MOCK=1` for smoke, set the API key, or use `PI_MODEL_AUTH=managed-identity` for keyless auth. |
 | azd env contains custom `AGENT_*` or `FOUNDRY_*` variables (other than `FOUNDRY_PROJECT_ENDPOINT`) | Foundry reserves these prefixes. Remove them with `azd env set <NAME>=` to clear, or rename. |
 

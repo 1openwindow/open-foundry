@@ -49,6 +49,7 @@ templates/
 scripts/
   bootstrap.mjs                         cp templates/* into cwd, substitute placeholders
   configure-env.mjs                     wrap azd env set; never print secrets; reads contract
+  grant-model-access.mjs                keyless: grant agent identity the model role (managed-identity only)
   verify.mjs                            invoke over the invocations REST endpoint (sends the Foundry preview header)
   _lib.mjs                              shared helpers (internal)
 references/
@@ -132,6 +133,16 @@ If the user wants additional env vars (e.g. `GITHUB_TOKEN`), tell them to:
 
 Just `azd deploy` (not `azd up` — there is no `infra/` to provision; see the mental model note). The skill does not wrap or intercept it. If it fails, look at `references/troubleshooting.md`.
 
+### Keyless (managed identity)
+
+For `PI_MODEL_AUTH=managed-identity` (no API key), the Hosted Agent calls the model with its own **Instance Identity**, which must hold a data-plane role on the model account or invocations return 401/403. After the first `azd deploy` (the identity only exists once deployed), grant it:
+
+```text
+node <skill>/scripts/grant-model-access.mjs
+```
+
+It resolves the agent's Instance Identity Principal ID from `azd ai agent show`, the model account scope from `AZURE_AI_PROJECT_ID`, and grants `Cognitive Services OpenAI User` via ARM REST (no `az` CLI needed; idempotent). Then redeploy so the new revision picks up keyless auth. Use `--dry-run` to preview the principal/scope/role first. The Instance Identity is stable across versions, so this is a one-time grant per agent.
+
 ### Verify
 
 `verify.mjs` smoke-tests the deployed agent over the **invocations REST endpoint**. It does not use `azd ai agent invoke`, because Hosted Agent session creation currently requires the opt-in header `Foundry-Features: HostedAgents=V1Preview` that the CLI does not send (otherwise HTTP 403 `preview_feature_required`). The script mints a data-plane token with `azd auth token`, creates a session, and POSTs the invocation with that header. It auto-discovers the endpoint and agent name from `azd env` + `agent.yaml`. Pass `--session <id>` to reuse a session for continuity tests; omit it to start a new session.
@@ -173,7 +184,7 @@ To migrate from the old `.azd/pi-foundry/` layout (legacy users only):
 - ❌ No edits to `.agents/skills/` (other than this skill), prompts, MCP config, business code.
 - ❌ No wrapping `azd` with intermediate scripts.
 - ❌ No personal/internal endpoints, ACR names, or model names as defaults. Always require explicit user input.
-- ✅ Inspect with `ls`/`cat`; mutate with the four scripts; deploy with `azd deploy`.
+- ✅ Inspect with `ls`/`cat`; mutate with the bundled scripts; deploy with `azd deploy`.
 
 ## Communication style
 
