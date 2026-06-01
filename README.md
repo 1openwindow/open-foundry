@@ -10,7 +10,7 @@ pi-foundry provides two things, and nothing else:
    Foundry Invocations protocol, Pi RPC, session mapping, streaming, and
    health/readiness.
 2. **A Pi skill** at `.agents/skills/pi-foundry/` that bootstraps 5 standard
-   `azd` files into your repo and runs `azd up`.
+   `azd` files into your repo and runs `azd deploy`.
 
 Your repo stays the source of truth. No private framework directory is
 installed. If you stop using pi-foundry you delete 5 files and you're out.
@@ -40,10 +40,17 @@ below. Run them by hand if you prefer:
 SKILL=path/to/pi-foundry/.agents/skills/pi-foundry
 
 node $SKILL/scripts/bootstrap.mjs       --agent-name <name> --runtime-image <acr>/pi-foundry-runtime:<tag>
-node $SKILL/scripts/configure-env.mjs   --env-name <env> --agent-name <name> --model <model> --base-url <url> --api-key-env PI_OPENAI_API_KEY
-azd up
+node $SKILL/scripts/configure-env.mjs   --env-name <env> --agent-name <name> --model <model> --base-url <url> --api-key-env PI_OPENAI_API_KEY \
+                                        --acr <acr>.azurecr.io --foundry-project-endpoint <url> --azure-subscription-id <sub> --azure-location <region>
+azd deploy
 node $SKILL/scripts/verify.mjs
 ```
+
+Note: this is a thin `azd` layout with no `infra/` to provision, so deploy with
+`azd deploy` (not `azd up`). `configure-env.mjs` derives the two values `azd
+deploy` needs but are awkward to find by hand — `AZURE_AI_PROJECT_ID` (the
+project's ARM resource id) and `AZURE_TENANT_ID` — from the project endpoint and
+subscription.
 
 You need: `azd` with the `azure.ai.agents` extension, a Foundry project, a
 published `pi-foundry-runtime` image your project can pull, and a Foundry

@@ -97,9 +97,28 @@ pi-foundry version
 
 ## Deploy
 
+This is a thin `azd` layout with **no `infra/`** to provision, so the deploy
+command is `azd deploy` — not `azd up` (which fails here looking for
+`infra/main.bicep`).
+
 ```bash
-azd up                       # first-time or full update (provision + deploy)
-azd deploy --no-prompt       # subsequent agent-only redeploys
+azd deploy                   # build/push to ACR + (re)deploy the Hosted Agent
+azd deploy --no-prompt       # non-interactive
+```
+
+`azd deploy` requires two env values that `configure-env.mjs` derives for you:
+
+- `AZURE_AI_PROJECT_ID` — the project's full ARM resource id
+  (`/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<account>/projects/<project>`).
+  Without it the first deploy fails with `AZURE_AI_PROJECT_ID is not set`.
+- `AZURE_TENANT_ID` — needed by a postdeploy hook. Without it the agent deploys
+  but postdeploy fails with `AZURE_TENANT_ID is not set`.
+
+If derivation failed, set them explicitly:
+
+```bash
+azd env set AZURE_AI_PROJECT_ID /subscriptions/.../projects/<project>
+azd env set AZURE_TENANT_ID <tenant-id>
 ```
 
 azd prints the new version, playground URL, and invocations endpoint. After
@@ -118,10 +137,15 @@ The Hosted Agent's name, version, and invocations endpoint are exposed under
 ```bash
 # Health smoke (uses azd env outputs + agent.yaml automatically):
 node <skill>/scripts/verify.mjs
-
-# Or by hand:
-azd ai agent invoke <agent-name>   --protocol invocations   --version <version>   --new-session   --timeout 600   'Say exactly: ok'
 ```
+
+`verify.mjs` calls the Hosted Agent **invocations REST endpoint** directly. It
+does not use `azd ai agent invoke`, because Hosted Agent session creation
+currently returns `403 preview_feature_required` unless the request carries the
+`Foundry-Features: HostedAgents=V1Preview` header, which the CLI does not send.
+The script mints a data-plane token (`azd auth token --scope
+https://ai.azure.com/.default`), creates a session, and POSTs the invocation
+with that header.
 
 Expected JSON includes `"output": "ok"` and `"mock": false`.
 

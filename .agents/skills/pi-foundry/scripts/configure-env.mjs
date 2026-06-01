@@ -61,11 +61,23 @@ if (args["from-env-file"]) {
 }
 
 // azd-required infra values
-azdSet("AZURE_SUBSCRIPTION_ID", prefer(args["azure-subscription-id"], fileValues.AZURE_SUBSCRIPTION_ID));
-azdSet("AZURE_TENANT_ID", prefer(args["azure-tenant-id"], fileValues.AZURE_TENANT_ID));
+const subscriptionId = prefer(args["azure-subscription-id"], fileValues.AZURE_SUBSCRIPTION_ID);
+const foundryEndpoint = prefer(args["foundry-project-endpoint"], fileValues.FOUNDRY_PROJECT_ENDPOINT);
+let tenantId = prefer(args["azure-tenant-id"], fileValues.AZURE_TENANT_ID);
+let projectId = prefer(args["azure-ai-project-id"], fileValues.AZURE_AI_PROJECT_ID);
+
+// AZURE_TENANT_ID and AZURE_AI_PROJECT_ID are both required by `azd deploy` but are awkward
+// to look up by hand, so derive them from the subscription + Foundry endpoint when missing.
+if (subscriptionId && (!tenantId || !projectId)) {
+  if (!tenantId) tenantId = await deriveTenantId(subscriptionId);
+  if (!projectId && foundryEndpoint) projectId = await deriveProjectId(subscriptionId, foundryEndpoint);
+}
+
+azdSet("AZURE_SUBSCRIPTION_ID", subscriptionId);
+azdSet("AZURE_TENANT_ID", tenantId);
 azdSet("AZURE_LOCATION", prefer(args["azure-location"], fileValues.AZURE_LOCATION));
-azdSet("FOUNDRY_PROJECT_ENDPOINT", prefer(args["foundry-project-endpoint"], fileValues.FOUNDRY_PROJECT_ENDPOINT));
-azdSet("AZURE_AI_PROJECT_ID", prefer(args["azure-ai-project-id"], fileValues.AZURE_AI_PROJECT_ID));
+azdSet("FOUNDRY_PROJECT_ENDPOINT", foundryEndpoint);
+azdSet("AZURE_AI_PROJECT_ID", projectId);
 azdSet("AZURE_CONTAINER_REGISTRY_ENDPOINT", prefer(args.acr, fileValues.AZURE_CONTAINER_REGISTRY_ENDPOINT));
 
 // Runtime base
@@ -111,6 +123,43 @@ console.log("azd env configuration complete.");
 
 function prefer(...values) {
   return values.find((value) => value !== undefined && value !== "");
+}
+
+// Mint an ARM token via azd (already authenticated) and GET a management resource.
+async function armGet(path) {
+  const out = run("azd", ["auth", "token", "--scope", "https://management.azure.com/.default", "--output", "json"], { quiet: true });
+  const token = JSON.parse(out).token;
+  const res = await fetch(`https://management.azure.com${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`ARM GET ${path} -> HTTP ${res.status}`);
+  return res.json();
+}
+
+async function deriveTenantId(subscriptionId) {
+  try {
+    const body = await armGet(`/subscriptions/${subscriptionId}?api-version=2022-12-01`);
+    return body.tenantId;
+  } catch (error) {
+    console.log(`note: could not derive AZURE_TENANT_ID (${error.message}); pass --azure-tenant-id if azd deploy fails.`);
+    return undefined;
+  }
+}
+
+// Foundry endpoint looks like https://<account>.services.ai.azure.com/api/projects/<project>.
+// Resolve the account's ARM id by name, then append /projects/<project>.
+async function deriveProjectId(subscriptionId, endpoint) {
+  try {
+    const url = new URL(endpoint);
+    const account = url.hostname.split(".")[0];
+    const project = url.pathname.match(/\/projects\/([^/]+)/)?.[1];
+    if (!account || !project) throw new Error("endpoint not in <account>.services.ai.azure.com/api/projects/<project> form");
+    const list = await armGet(`/subscriptions/${subscriptionId}/providers/Microsoft.CognitiveServices/accounts?api-version=2025-04-01-preview`);
+    const match = (list.value ?? []).find((a) => a.name === account);
+    if (!match) throw new Error(`CognitiveServices account '${account}' not found in subscription`);
+    return `${match.id}/projects/${project}`;
+  } catch (error) {
+    console.log(`note: could not derive AZURE_AI_PROJECT_ID (${error.message}); pass --azure-ai-project-id if azd deploy fails.`);
+    return undefined;
+  }
 }
 
 function azdSet(name, value) {

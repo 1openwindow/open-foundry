@@ -1,6 +1,6 @@
 ---
 name: pi-foundry
-description: Helps a user deploy their existing Pi agent repo to Microsoft Foundry Hosted Agents via a thin azd-compatible layout. Use when the user wants to add Foundry deployment to a local Pi agent repo, configure azd/PI_* settings, deploy with azd up, verify remote invocations, or debug deployment, session, and streaming issues.
+description: Helps a user deploy their existing Pi agent repo to Microsoft Foundry Hosted Agents via a thin azd-compatible layout. Use when the user wants to add Foundry deployment to a local Pi agent repo, configure azd/PI_* settings, deploy with azd deploy, verify remote invocations, or debug deployment, session, and streaming issues.
 ---
 
 # Deploy a Pi Agent to Foundry
@@ -37,7 +37,7 @@ Critical properties:
 
 - **Zero pi-foundry-private files in the user repo.** No `.azd/pi-foundry/`, no `pi-foundry.yaml`, no `lock.yaml`, no `render.mjs`, no `doctor.mjs`. Only the 5 azd-native files. If the user later wants to leave pi-foundry, they delete 5 files and they're out.
 - **All contract knowledge lives in the runtime image and `references/contract.json`.** Env var names, required-when rules, resource tiers, reserved prefixes: never hardcode them in conversation; read from contract.
-- **`azd up` is the deploy command.** Don't wrap it. Don't add custom workflows. Don't introduce intermediate CLIs.
+- **`azd deploy` is the deploy command.** This is a thin layout with **no `infra/` Bicep** — the Foundry project and ACR already exist and are passed via env, so there is nothing to provision. `azd up` fails here (it looks for `infra/main.bicep`); use `azd deploy`. Don't wrap it. Don't add custom workflows. Don't introduce intermediate CLIs.
 
 ## Skill assets
 
@@ -49,7 +49,7 @@ templates/
 scripts/
   bootstrap.mjs                         cp templates/* into cwd, substitute placeholders
   configure-env.mjs                     wrap azd env set; never print secrets; reads contract
-  verify.mjs                            wrap azd ai agent invoke for smoke
+  verify.mjs                            invoke over the invocations REST endpoint (sends the Foundry preview header)
   _lib.mjs                              shared helpers (internal)
 references/
   contract.json                         single source of truth for env / tiers / reserved prefixes
@@ -82,6 +82,8 @@ Ask the user only for what you can't infer:
 - **Runtime image** — there is no public default. The user must provide an image reference like `<acr>.azurecr.io/pi-foundry-runtime:<tag>`. If they don't have one, point them at `docs/runtime-image.md` in the pi-foundry repo for how to build/publish one.
 - **Model** — `PI_OPENAI_MODEL`, e.g. `gpt-4.1-mini`. Default `PI_ARGS` is built from it.
 - **OpenAI-compatible endpoint** — `PI_OPENAI_BASE_URL`, usually `https://<account>.cognitiveservices.azure.com/openai/v1`.
+- **Foundry project + subscription** — `FOUNDRY_PROJECT_ENDPOINT` (e.g. `https://<account>.services.ai.azure.com/api/projects/<project>`), `AZURE_SUBSCRIPTION_ID`, `AZURE_LOCATION`. `configure-env.mjs` derives `AZURE_AI_PROJECT_ID` (the project's ARM resource id, required by `azd deploy`) and `AZURE_TENANT_ID` from these automatically; if derivation fails it prints how to pass them explicitly.
+- **Container registry** — `AZURE_CONTAINER_REGISTRY_ENDPOINT` (`<acr>.azurecr.io`) for the remote build.
 - **API key** — never as a CLI arg. Either env var name (`--api-key-env`) or `--from-env-file`. Or use keyless `--model-auth managed-identity`.
 
 ## Standard workflow
@@ -90,8 +92,9 @@ Ask the user only for what you can't infer:
 1. Inspect repo (ls/cat).
 2. Confirm agent name and runtime image with user.
 3. node <skill>/scripts/bootstrap.mjs --agent-name <name> --runtime-image <image>
-4. node <skill>/scripts/configure-env.mjs --env-name <env> --agent-name <name> --model <model> --base-url <url> --api-key-env <ENV>
-5. azd up
+4. node <skill>/scripts/configure-env.mjs --env-name <env> --agent-name <name> --model <model> --base-url <url> --api-key-env <ENV> \
+     --acr <acr>.azurecr.io --foundry-project-endpoint <url> --azure-subscription-id <sub> --azure-location <region>
+5. azd deploy
 6. node <skill>/scripts/verify.mjs
 ```
 
@@ -127,11 +130,11 @@ If the user wants additional env vars (e.g. `GITHUB_TOKEN`), tell them to:
 
 ### Deploy
 
-Just `azd up`. The skill does not wrap or intercept it. If it fails, look at `references/troubleshooting.md`.
+Just `azd deploy` (not `azd up` — there is no `infra/` to provision; see the mental model note). The skill does not wrap or intercept it. If it fails, look at `references/troubleshooting.md`.
 
 ### Verify
 
-`verify.mjs` calls `azd ai agent invoke` with sensible defaults. It auto-discovers agent name and version from `agent.yaml` + `azd env` outputs. Pass `--session <id>` to reuse a session, or omit for `--new-session`.
+`verify.mjs` smoke-tests the deployed agent over the **invocations REST endpoint**. It does not use `azd ai agent invoke`, because Hosted Agent session creation currently requires the opt-in header `Foundry-Features: HostedAgents=V1Preview` that the CLI does not send (otherwise HTTP 403 `preview_feature_required`). The script mints a data-plane token with `azd auth token`, creates a session, and POSTs the invocation with that header. It auto-discovers the endpoint and agent name from `azd env` + `agent.yaml`. Pass `--session <id>` to reuse a session for continuity tests; omit it to start a new session.
 
 ## Troubleshooting
 
@@ -153,7 +156,7 @@ The skill is **stateless and reentrant**. To change model or swap regions:
 
 ```text
 node <skill>/scripts/configure-env.mjs --agent-name <name> --model <new-model>
-azd up
+azd deploy
 ```
 
 To migrate from the old `.azd/pi-foundry/` layout (legacy users only):
@@ -170,7 +173,7 @@ To migrate from the old `.azd/pi-foundry/` layout (legacy users only):
 - ❌ No edits to `.agents/skills/` (other than this skill), prompts, MCP config, business code.
 - ❌ No wrapping `azd` with intermediate scripts.
 - ❌ No personal/internal endpoints, ACR names, or model names as defaults. Always require explicit user input.
-- ✅ Inspect with `ls`/`cat`; mutate with the four scripts; deploy with `azd up`.
+- ✅ Inspect with `ls`/`cat`; mutate with the four scripts; deploy with `azd deploy`.
 
 ## Communication style
 

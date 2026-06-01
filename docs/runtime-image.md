@@ -92,7 +92,7 @@ PI_FOUNDRY_RUNTIME_IMAGE=ghcr.io/<org>/pi-foundry-runtime:<tag> npm run runtime:
 docker push ghcr.io/<org>/pi-foundry-runtime:<tag>
 ```
 
-If users will rely on ACR remote builds via `azd up`, make sure the registry
+If users will rely on ACR remote builds via `azd deploy`, make sure the registry
 holding the runtime image is one the Foundry agent identities have `AcrPull`
 on. The skill's `bootstrap.mjs --runtime-image <ref>` is where that reference
 lands; users can change it at any time by editing `Dockerfile`.

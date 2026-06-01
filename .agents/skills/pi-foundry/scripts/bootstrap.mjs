@@ -89,7 +89,7 @@ console.log("");
 console.log(`pi-foundry bootstrap complete for ${agentName}.`);
 console.log("Next:");
 console.log("  1. node <skill>/scripts/configure-env.mjs --env-name <env> --agent-name <name> --model <model> ...");
-console.log("  2. azd up");
+console.log("  2. azd deploy");
 console.log("  3. node <skill>/scripts/verify.mjs");
 
 // ---------------------------------------------------------------------------
