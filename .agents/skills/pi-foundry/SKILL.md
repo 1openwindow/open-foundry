@@ -20,7 +20,7 @@ Confirm these before bootstrapping; if missing, tell the user exactly what to in
 - **azd ≥ 1.25.4** with the Foundry extension: `azd version`, then `azd extension list` (expect `azure.ai.agents`); install with `azd extension install azure.ai.agents`. Sign in with `azd auth login`. `az` (Azure CLI) is **not** required — the scripts use `azd auth token` + ARM REST.
 - **Node ≥ 20** to run the skill scripts.
 - **A Foundry project**: subscription id, location, and project endpoint (`https://<account>.services.ai.azure.com/api/projects/<project>`).
-- **A runtime image** the Foundry project can pull. For a quick trial use the published public image `ghcr.io/1openwindow/pi-foundry-runtime:0.1.0`. For production, publish your own (see [docs/runtime-image.md](https://github.com/1openwindow/pi-foundry/blob/main/docs/runtime-image.md)).
+- **A runtime image** the Foundry project can pull. For a quick trial use `ghcr.io/1openwindow/pi-foundry-runtime:0.1`; for production pin an exact version or publish your own (see [docs/runtime-image.md](https://github.com/1openwindow/pi-foundry/blob/main/docs/runtime-image.md)).
 - **A container registry** (`<acr>.azurecr.io`) for `azd deploy`'s remote build, with `AcrPull` granted to the Foundry agent identities.
 - **A model**: OpenAI-compatible endpoint + model name, plus either an API key or — for keyless `managed-identity` — the Azure rights to create a role assignment (`Owner` or `User Access Administrator` on the model account), since `grant-model-access.mjs` writes one.
 - **Foundry `HostedAgents` preview** enabled for the tenant/subscription; invocations send `Foundry-Features: HostedAgents=V1Preview` and otherwise return `403 preview_feature_required`.
@@ -92,7 +92,7 @@ Rules:
 Ask the user only for what you can't infer:
 
 - **Agent name** — default to a sanitized version of the repo directory name. Lowercase a-z/0-9/hyphen, 3-64 chars.
-- **Runtime image** — for a quick trial, the published public image `ghcr.io/1openwindow/pi-foundry-runtime:0.1.0` works out of the box. For production, the user provides their own reference like `<acr>.azurecr.io/pi-foundry-runtime:<tag>`; see [docs/runtime-image.md](https://github.com/1openwindow/pi-foundry/blob/main/docs/runtime-image.md) for how to build/publish one.
+- **Runtime image** — for a quick trial, `ghcr.io/1openwindow/pi-foundry-runtime:0.1` works out of the box. For production, pin an exact version or provide your own like `<acr>.azurecr.io/pi-foundry-runtime:<tag>`; see [docs/runtime-image.md](https://github.com/1openwindow/pi-foundry/blob/main/docs/runtime-image.md) for how to build/publish one.
 - **Model** — `PI_OPENAI_MODEL`, e.g. `gpt-4.1-mini`. Default `PI_ARGS` is built from it.
 - **OpenAI-compatible endpoint** — `PI_OPENAI_BASE_URL`, usually `https://<account>.cognitiveservices.azure.com/openai/v1`.
 - **Foundry project + subscription** — `FOUNDRY_PROJECT_ENDPOINT` (e.g. `https://<account>.services.ai.azure.com/api/projects/<project>`), `AZURE_SUBSCRIPTION_ID`, `AZURE_LOCATION`. `configure-env.mjs` derives `AZURE_AI_PROJECT_ID` (the project's ARM resource id, required by `azd deploy`) and `AZURE_TENANT_ID` from these automatically; if derivation fails it prints how to pass them explicitly.

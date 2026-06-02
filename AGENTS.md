@@ -22,3 +22,13 @@ with these. When a tradeoff isn't covered here, ask.
 5. **The Skill is the product's final interaction.**
    The best deploy/troubleshoot/long-task experience lives in the skill, not in raw
    commands. Invest there.
+
+6. **Docs are concise and user-facing.**
+   Write from the user's task perspective, not pi-foundry's development perspective.
+   State the value and the action; drop the internal rationale.
+
+## Releasing the runtime image
+
+To release: bump `package.json` `version`, commit, push a `vX.Y.Z` tag. CI
+(`.github/workflows/runtime-image.yml`) builds and publishes
+`ghcr.io/<owner>/pi-foundry-runtime:{X.Y.Z, X.Y, latest}`. Never `docker push` by hand.

@@ -54,7 +54,7 @@ runtime image so you can try it immediately):
 
 ```bash
 SKILL=path/to/pi-foundry/.agents/skills/pi-foundry
-IMAGE=ghcr.io/1openwindow/pi-foundry-runtime:0.1.0   # public trial image; publish your own for production
+IMAGE=ghcr.io/1openwindow/pi-foundry-runtime:0.1   # public trial image; pin an exact version for production
 
 node $SKILL/scripts/bootstrap.mjs       --agent-name <name> --runtime-image $IMAGE
 node $SKILL/scripts/configure-env.mjs   --env-name <env> --agent-name <name> --model <model> --base-url <url> --api-key-env PI_OPENAI_API_KEY \
@@ -71,7 +71,7 @@ subscription.
 
 You need: `azd` (≥ 1.25.4) with the `azure.ai.agents` extension, a Foundry
 project, a runtime image your project can pull (use the public
-`ghcr.io/1openwindow/pi-foundry-runtime:0.1.0` to try it, or publish your own),
+`ghcr.io/1openwindow/pi-foundry-runtime:0.1` to try it, or publish your own),
 and a Foundry OpenAI-compatible endpoint + model + an API key (or keyless
 managed-identity auth via `PI_MODEL_AUTH=managed-identity`).
 
