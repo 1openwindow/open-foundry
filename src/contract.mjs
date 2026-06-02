@@ -44,6 +44,7 @@ export const contract = {
       { name: "PI_MODEL_AUTH", default: "apikey", accepts: ["apikey", "managed-identity"], note: "managed-identity mints AAD bearer tokens via DefaultAzureCredential; no PI_OPENAI_API_KEY needed." },
       { name: "FOUNDRY_TOKEN_SCOPE", default: "https://cognitiveservices.azure.com/.default", note: "AAD scope used when PI_MODEL_AUTH=managed-identity." },
       { name: "REQUEST_TIMEOUT_MS", default: "300000" },
+      { name: "SSE_HEARTBEAT_MS", default: "20000", note: "SSE keepalive interval; emits a `:` comment so Foundry's ~120s APIM idle timeout never fires during silent phases. 0 disables." },
       { name: "ENABLE_DIAGNOSTICS", default: "0", accepts: ["0", "1", "true", "false"] },
       { name: "WORKSPACE_DIR", default: "/workspace" },
       { name: "STATE_DIR", default: "${HOME}/.pi-foundry" },

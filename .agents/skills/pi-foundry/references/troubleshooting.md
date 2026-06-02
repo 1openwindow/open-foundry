@@ -29,7 +29,7 @@ The LLM consults this file when `azd deploy` or `verify.mjs` fails. Match the er
 
 | Symptom | Cause + action |
 |---|---|
-| `azd deploy` succeeds but `verify.mjs` returns nothing or times out | The agent may still be activating, or the model call is slow. Retry `verify.mjs --timeout 900`; check `azd ai agent monitor <name> --tail 100 --type console`. |
+| `azd deploy` succeeds but `verify.mjs` returns nothing or times out | The agent may still be activating, or the task is slow. `verify.mjs` already streams (SSE), so long tasks survive the gateway idle timeout — if it still hangs, retry and check `azd ai agent monitor <name> --tail 100 --type console`. |
 | `agent.yaml is missing` during deploy | Foundry deploy currently reads `agent.yaml` from repo root. The skill puts it there by design. If it was deleted, rerun `bootstrap.mjs`. |
 | Resource tier rejected | Hosted Agent only allows cpu/memory pairs `0.25/0.5Gi, 0.5/1Gi, 1/2Gi, 2/4Gi`. Edit `azure.yaml` and `agent.yaml` to match. |
 | Container exceeds reserved env restriction | Some `environment_variables` entry uses `AGENT_*` or `FOUNDRY_*` (other than `FOUNDRY_PROJECT_ENDPOINT`). Remove it from `agent.yaml` / `agent.manifest.yaml`. |
@@ -40,6 +40,7 @@ The LLM consults this file when `azd deploy` or `verify.mjs` fails. Match the er
 |---|---|
 | Response includes `"mock": true` when user expected real model | `PI_MOCK=1` is still set. `azd env set PI_MOCK=0` and `azd deploy` to roll a new revision. |
 | Session continuity not working | Pass the same `agent_session_id`. `verify.mjs --session <id>` reuses sessions. |
+| HTTP 408 `{"error":{"code":"Timeout"}}` (header `Apim-Request-Id`) on tasks longer than ~120s | Foundry's APIM gateway enforces a ~120s **idle** (no-bytes) timeout; a non-streaming request holds the connection silent for the whole task, so anything past ~120s is cut at the gateway before the container's `REQUEST_TIMEOUT_MS` ever applies. Use the SSE path (`verify.mjs` streams by default; send `Accept: text/event-stream`): the runtime emits an SSE keepalive every `SSE_HEARTBEAT_MS` (default 20s) so silent phases (tool runs, uploads) keep the idle timer alive. `azd ai agent invoke` cannot consume SSE — it stays limited to short (<~120s) tasks. |
 
 ## Runtime image
 

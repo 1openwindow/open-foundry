@@ -29,6 +29,9 @@ dist/
 build/
 coverage/
 
+# Local test artifacts
+pi-session-report.html
+
 # Python cache
 __pycache__/
 *.py[cod]

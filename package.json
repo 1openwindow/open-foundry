@@ -2,7 +2,7 @@
   "name": "pi-foundry",
   "private": true,
   "type": "module",
-  "version": "0.0.0",
+  "version": "0.1.1",
   "scripts": {
     "start:backend": "node src/backend.mjs",
     "test": "node --test --test-reporter=spec test/*.test.mjs",

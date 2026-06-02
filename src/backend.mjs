@@ -29,6 +29,11 @@ const serverVersion = (() => {
 const port = Number.parseInt(process.env.PORT ?? "8088", 10);
 const host = process.env.HOST ?? "0.0.0.0";
 const requestTimeoutMs = Number.parseInt(process.env.REQUEST_TIMEOUT_MS ?? "300000", 10);
+// Foundry's APIM gateway drops a streamed response after ~120s with no body bytes
+// (408 "operation was timeout"). Emit an SSE keepalive comment on this interval so
+// silent phases (tool execution, uploads) keep the gateway idle timer from firing.
+// Set to 0 to disable. Default 20s gives a ~6x margin under the observed ~120s cap.
+const sseHeartbeatMs = Number.parseInt(process.env.SSE_HEARTBEAT_MS ?? "20000", 10);
 const piBin = process.env.PI_BIN ?? "pi";
 const piArgs = parseArgs(process.env.PI_ARGS ?? "--mode rpc --no-session");
 const mock = process.env.PI_MOCK === "1" || process.env.PI_MOCK === "true";
@@ -446,6 +451,14 @@ const server = createServer(async (req, res) => {
           connection: "keep-alive",
         });
 
+        // Keep the gateway idle timer alive during silent phases (tool runs, uploads).
+        // SSE comments (`:`-prefixed) are ignored by every spec-compliant parser, so
+        // they never surface as token/done events.
+        const heartbeat = sseHeartbeatMs > 0
+          ? setInterval(() => { try { res.write(": keepalive\n\n"); } catch { /* connection gone */ } }, sseHeartbeatMs)
+          : undefined;
+        res.on("close", () => { if (heartbeat) clearInterval(heartbeat); });
+
         try {
           const result = await handleInvocation(payload, invocationId, sessionId, (delta) => {
             writeSse(res, { type: "token", content: delta });
@@ -467,6 +480,8 @@ const server = createServer(async (req, res) => {
             invocation_id: invocationId,
             request_id: requestId,
           });
+        } finally {
+          if (heartbeat) clearInterval(heartbeat);
         }
         res.end();
         return;

@@ -84,6 +84,11 @@
         "default": "300000"
       },
       {
+        "name": "SSE_HEARTBEAT_MS",
+        "default": "20000",
+        "note": "SSE keepalive interval; emits a `:` comment so Foundry's ~120s APIM idle timeout never fires during silent phases. 0 disables."
+      },
+      {
         "name": "ENABLE_DIAGNOSTICS",
         "default": "0",
         "accepts": [

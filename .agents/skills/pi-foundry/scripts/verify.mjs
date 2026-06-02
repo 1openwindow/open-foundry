@@ -11,6 +11,13 @@
 //   verify.mjs [--agent <name>] [--message <text>] [--session <id>]
 //              [--scope <aad-scope>] [--preview <feature-flag>] [--timeout <seconds>]
 //
+// Always uses the SSE path. Foundry's APIM gateway drops a response after ~120s with
+// no body bytes (HTTP 408 "operation was timeout"); the runtime emits keepalive bytes
+// on the stream so the gateway idle timer never fires, which lets long tasks (>~120s)
+// complete. Token deltas stream to stderr for progress; the final `done.full_text` is
+// printed to stdout. (`azd ai agent invoke` can't consume SSE, so it stays limited to
+// short tasks — this script is the long-task path.)
+//
 // Prints the session id (stderr) so you can chain a second call for continuity:
 //   SID=$(verify.mjs --message 'Remember the word mango. Reply: stored' 2>&1 >/dev/null | sed -n 's/^session: //p')
 //   verify.mjs --session "$SID" --message 'What word did I tell you? Reply with just the word.'
@@ -50,10 +57,55 @@ const sessionId = args.session ?? (await createSession());
 console.error(`session: ${sessionId}`);
 
 const url = `${base}/protocols/invocations?api-version=${apiVersion}&agent_session_id=${encodeURIComponent(sessionId)}`;
-const response = await fetchJson(url, { method: "POST", headers, body: JSON.stringify({ input: message }) });
-console.log(typeof response === "string" ? response : JSON.stringify(response, null, 2));
+const fullText = await fetchSse(url, {
+  method: "POST",
+  headers: { ...headers, Accept: "text/event-stream" },
+  body: JSON.stringify({ input: message }),
+});
+console.log(fullText);
 
 // ---------------------------------------------------------------------------
+
+// Invocation always streams (SSE): parses `data:` frames, ignores `:`-prefixed
+// keepalive comments, streams token deltas to stderr for progress, and returns the
+// final `done.full_text`.
+async function fetchSse(url, init) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${init.method} ${url}\n${await res.text()}`);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let fullText = "";
+    let done = false;
+    for (;;) {
+      const { value, done: streamDone } = await reader.read();
+      if (streamDone) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sep;
+      while ((sep = buffer.indexOf("\n\n")) !== -1) {
+        const frame = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        for (const line of frame.split(/\r?\n/)) {
+          if (!line.startsWith("data:")) continue; // skip ':' keepalive comments
+          const raw = line.slice(5).trim();
+          if (!raw) continue;
+          let event;
+          try { event = JSON.parse(raw); } catch { continue; }
+          if (event.type === "token") process.stderr.write(event.content ?? "");
+          else if (event.type === "done") { fullText = event.full_text ?? ""; done = true; }
+          else if (event.type === "error") throw new Error(`stream error: ${event.message ?? "unknown"}`);
+        }
+      }
+    }
+    if (!done) throw new Error("SSE stream ended without a done event");
+    return fullText;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function createSession() {
   const url = `${base}/sessions?api-version=${apiVersion}`;
