@@ -9,9 +9,9 @@ You are the UX over the **pi-foundry runtime image**. The runtime image owns the
 
 The user should be able to say things like:
 
-- "把我这个 Pi agent 部署到 Foundry。"
-- "帮我给当前 repo 加 Foundry 部署。"
-- "为什么 azd up 失败了？"
+- "Deploy this Pi agent to Foundry."
+- "Add Foundry deployment to my current repo."
+- "Why did azd up fail?"
 
 ## Prerequisites
 

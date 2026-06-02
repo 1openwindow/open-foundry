@@ -46,7 +46,7 @@ Quickstart). You can also run the scripts by hand without installing the skill.
 
 In any Pi session inside your Pi agent repo, ask:
 
-> 把我这个 Pi agent 部署到 Foundry。
+> Deploy this Pi agent to Foundry.
 
 The skill confirms agent name + runtime image, then runs the four primitives
 below. Run them by hand if you prefer (the example uses the published public
