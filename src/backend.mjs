@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { createServer } from "node:http";
 import { resolve, sep } from "node:path";
-import { createPiRpcAdapter } from "./adapters/pi-rpc.mjs";
+import { createAdapter } from "./adapters/index.mjs";
 import { validateRuntimeEnv } from "./contract.mjs";
 
 // Invocations protocol wire constants (see azure-ai-agentserver-invocations).
@@ -34,6 +34,7 @@ const requestTimeoutMs = Number.parseInt(process.env.REQUEST_TIMEOUT_MS ?? "3000
 // silent phases (tool execution, uploads) keep the gateway idle timer from firing.
 // Set to 0 to disable. Default 20s gives a ~6x margin under the observed ~120s cap.
 const sseHeartbeatMs = Number.parseInt(process.env.SSE_HEARTBEAT_MS ?? "20000", 10);
+const harness = (process.env.HARNESS ?? "pi").trim().toLowerCase();
 const piBin = process.env.PI_BIN ?? "pi";
 const piArgs = parseArgs(process.env.PI_ARGS ?? "--mode rpc --no-session");
 const mock = process.env.PI_MOCK === "1" || process.env.PI_MOCK === "true";
@@ -82,7 +83,7 @@ function log(level, message, fields = {}) {
   console.log(JSON.stringify({ level, message, time: new Date().toISOString(), ...fields }));
 }
 
-const piAdapter = createPiRpcAdapter({
+const adapter = createAdapter(harness, {
   piBin,
   piArgs,
   piAgentDir,
@@ -94,6 +95,7 @@ const piAdapter = createPiRpcAdapter({
   foundryOpenAIModel,
   modelAuth,
   modelTokenScope,
+  stateDir,
 });
 
 function sendJson(res, statusCode, payload) {
@@ -278,7 +280,7 @@ async function handleInvocation(payload, invocationId, sessionId, onTextDelta) {
   });
 
   try {
-    const result = await piAdapter.invoke(prompt, { requestId: invocationId, sessionId, cwd, piSessionDir, onTextDelta });
+    const result = await adapter.invoke(prompt, { requestId: invocationId, sessionId, cwd, piSessionDir, onTextDelta });
     const latencyMs = Date.now() - started;
     const modelText = result.text;
     const output = modelText;
@@ -376,7 +378,8 @@ const openApiSpec = {
 };
 
 await ensureRuntimeDirs();
-await piAdapter.configureFoundryOpenAIProvider();
+await adapter.init();
+await adapter.configureModelProvider();
 
 const server = createServer(async (req, res) => {
   const method = req.method ?? "GET";
@@ -516,10 +519,23 @@ server.on("error", (error) => {
   process.exitCode = 1;
 });
 
+// Graceful shutdown: release adapter-held resources (e.g. the Copilot CLI
+// subprocess) before exiting so the container stops cleanly.
+let shuttingDown = false;
+for (const signal of ["SIGTERM", "SIGINT"]) {
+  process.on(signal, () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    server.close();
+    Promise.resolve(adapter.dispose?.()).catch(() => {}).finally(() => process.exit(0));
+  });
+}
+
 server.listen(port, host, () => {
   log("info", "server_listening", {
     url: `http://${host}:${port}`,
-    mode: mock ? "mock" : "pi-rpc",
+    mode: mock ? "mock" : harness,
+    harness,
     piBin,
     piArgs,
     workspaceDir,

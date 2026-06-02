@@ -39,10 +39,14 @@ export const contract = {
     requiredWhenLiveKeyless: ["PI_OPENAI_BASE_URL", "PI_OPENAI_MODEL"],
     // Optional runtime knobs with their defaults / accepted shapes.
     runtime: [
+      { name: "HARNESS", default: "pi", accepts: ["pi", "copilot"], note: "Agent harness. copilot drives GitHub Copilot via @github/copilot-sdk and reaches the model through BYOK (apikey only)." },
       { name: "PI_ARGS", default: "--mode rpc --no-session", note: "Append --provider foundry --model <model> when using PI_OPENAI_*." },
       { name: "PI_MOCK", default: "0", accepts: ["0", "1", "true", "false"] },
-      { name: "PI_MODEL_AUTH", default: "apikey", accepts: ["apikey", "managed-identity"], note: "managed-identity mints AAD bearer tokens via DefaultAzureCredential; no PI_OPENAI_API_KEY needed." },
+      { name: "PI_MODEL_AUTH", default: "apikey", accepts: ["apikey", "managed-identity"], note: "managed-identity mints AAD bearer tokens via DefaultAzureCredential; no PI_OPENAI_API_KEY needed. Not supported with HARNESS=copilot." },
       { name: "FOUNDRY_TOKEN_SCOPE", default: "https://cognitiveservices.azure.com/.default", note: "AAD scope used when PI_MODEL_AUTH=managed-identity." },
+      { name: "COPILOT_PROVIDER_TYPE", default: "(auto)", accepts: ["azure", "openai", "anthropic"], note: "HARNESS=copilot BYOK provider type. Auto-detected from PI_OPENAI_BASE_URL (azure when the host is *.azure.com)." },
+      { name: "COPILOT_WIRE_API", default: "responses", accepts: ["responses", "completions"], note: "HARNESS=copilot BYOK wire API format." },
+      { name: "COPILOT_API_VERSION", default: "2024-10-21", note: "HARNESS=copilot Azure provider api-version." },
       { name: "REQUEST_TIMEOUT_MS", default: "300000" },
       { name: "SSE_HEARTBEAT_MS", default: "20000", note: "SSE keepalive interval; emits a `:` comment so Foundry's ~120s APIM idle timeout never fires during silent phases. 0 disables." },
       { name: "ENABLE_DIAGNOSTICS", default: "0", accepts: ["0", "1", "true", "false"] },
@@ -56,8 +60,17 @@ export const contract = {
 
 export function validateRuntimeEnv(env, { mock } = {}) {
   const issues = [];
+  const harness = String(env.HARNESS ?? "pi").trim().toLowerCase();
+  if (harness !== "pi" && harness !== "copilot") {
+    issues.push({ severity: "error", name: "HARNESS", message: `HARNESS must be one of pi, copilot (got "${harness}").` });
+  }
+  // Copilot reaches the model through BYOK, which is API-key only; there is no
+  // keyless path, so reject managed-identity instead of failing at first call.
+  if (harness === "copilot" && String(env.PI_MODEL_AUTH ?? "").trim().toLowerCase() === "managed-identity") {
+    issues.push({ severity: "error", name: "PI_MODEL_AUTH", message: "HARNESS=copilot does not support PI_MODEL_AUTH=managed-identity; Copilot BYOK requires an API key (set PI_OPENAI_API_KEY)." });
+  }
   if (!mock) {
-    const keyless = String(env.PI_MODEL_AUTH ?? "").trim().toLowerCase() === "managed-identity";
+    const keyless = harness !== "copilot" && String(env.PI_MODEL_AUTH ?? "").trim().toLowerCase() === "managed-identity";
     const required = keyless ? contract.env.requiredWhenLiveKeyless : contract.env.requiredWhenLive;
     for (const name of required) {
       if (!env[name] || String(env[name]).trim() === "") {
