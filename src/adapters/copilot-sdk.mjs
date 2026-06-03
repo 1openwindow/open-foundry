@@ -62,7 +62,18 @@ export function createCopilotSdkAdapter({
 
   async function init() {
     if (isMock) return;
-    const sdk = await import("@github/copilot-sdk");
+    let sdk;
+    try {
+      sdk = await import("@github/copilot-sdk");
+    } catch (err) {
+      if (err?.code === "ERR_MODULE_NOT_FOUND") {
+        throw new Error(
+          "HARNESS=copilot but @github/copilot-sdk is not installed in this runtime image. " +
+            "Use the Copilot image (ghcp-foundry-runtime), or set HARNESS=pi.",
+        );
+      }
+      throw err;
+    }
     CopilotClient = sdk.CopilotClient;
     approveAll = sdk.approveAll;
     client = new CopilotClient({ baseDirectory: copilotHome, logLevel: "error" });

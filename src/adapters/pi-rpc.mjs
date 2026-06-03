@@ -124,6 +124,10 @@ export function createPiRpcAdapter({
       }, requestTimeoutMs);
 
       child.on("error", (error) => {
+        if (error && typeof error === "object" && error.code === "ENOENT") {
+          finish(new HttpError(502, `pi runtime not found (${piBin}). This image was built without pi-coding-agent; use the default (pi) image, or set HARNESS=copilot.`));
+          return;
+        }
         finish(new HttpError(502, `failed to start pi: ${error.message}`));
       });
 

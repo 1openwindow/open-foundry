@@ -1,5 +1,11 @@
 FROM node:24-bookworm-slim
 
+# Build one image per harness; each image bundles only its own runtime.
+#   HARNESS=pi       -> installs pi-coding-agent     (image: pi-foundry-runtime,   ~655MB)
+#   HARNESS=copilot  -> installs @github/copilot-sdk  (image: ghcp-foundry-runtime, ~1.6GB)
+ARG HARNESS=pi
+ENV HARNESS=${HARNESS}
+
 ENV NODE_ENV=production \
     PORT=8088 \
     HOST=0.0.0.0 \
@@ -14,17 +20,24 @@ ENV NODE_ENV=production \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && npm install -g @earendil-works/pi-coding-agent@0.76.0 --ignore-scripts \
     && mkdir -p /app /workspace /home/node/.pi-foundry \
     && chown -R node:node /app /workspace /home/node \
     && printf '#!/bin/sh\nexec node /app/src/cli.mjs "$@"\n' > /usr/local/bin/pi-foundry \
     && chmod +x /usr/local/bin/pi-foundry
 
+# pi harness only: the pi-coding-agent CLI is spawned over JSON-RPC.
+RUN if [ "$HARNESS" = "pi" ]; then \
+        npm install -g @earendil-works/pi-coding-agent@0.76.0 --ignore-scripts; \
+    fi
+
 USER node
 WORKDIR /app
 
 COPY --chown=node:node package.json package-lock.json ./
-RUN npm ci --omit=dev
+# copilot harness pulls in optional deps (@github/copilot-sdk + CLI agent);
+# pi stays slim by omitting them.
+RUN if [ "$HARNESS" = "copilot" ]; then npm ci --omit=dev; \
+    else npm ci --omit=dev --omit=optional; fi
 
 COPY --chown=node:node src ./src
 

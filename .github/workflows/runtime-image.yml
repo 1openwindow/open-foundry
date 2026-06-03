@@ -2,16 +2,20 @@ name: runtime-image
 
 # Builds Dockerfile.runtime and publishes it to GHCR.
 #
+# Two images are built per run, one per harness (same version tags, different name):
+#   pi      (default)  ->  ghcr.io/<owner>/pi-foundry-runtime:<tag>
+#   copilot            ->  ghcr.io/<owner>/ghcp-foundry-runtime:<tag>
+#
 # Triggers:
-#   - push a tag like  v0.2.0   → publishes  ghcr.io/<owner>/pi-foundry-runtime:0.2.0
-#                                            ghcr.io/<owner>/pi-foundry-runtime:0.2
-#                                            ghcr.io/<owner>/pi-foundry-runtime:latest
-#   - workflow_dispatch  → publishes ghcr.io/<owner>/pi-foundry-runtime:sha-<short>
-#                          (and :manual-<run-number>, never :latest)
+#   - push a tag like  v0.2.0   → publishes  :0.2.0  :0.2  :latest  on both images
+#   - workflow_dispatch  → publishes :sha-<short> and :manual-<run-number>
+#                          on both images, never :latest
 #
 # Repo settings required (one-time):
 #   Settings → Actions → General → Workflow permissions = Read and write
 #   (or rely on the explicit `permissions:` block below — which we use).
+#   Each GHCR package (pi-foundry-runtime, ghcp-foundry-runtime) must be made
+#   public separately the first time it is published.
 
 on:
   push:
@@ -26,8 +30,15 @@ permissions:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - harness: pi
+            image: pi-foundry-runtime
+          - harness: copilot
+            image: ghcp-foundry-runtime
     env:
-      IMAGE: ghcr.io/${{ github.repository_owner }}/pi-foundry-runtime
+      IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
     steps:
       - uses: actions/checkout@v4
 
@@ -56,6 +67,8 @@ jobs:
           context: .
           file: Dockerfile.runtime
           push: true
+          build-args: |
+            HARNESS=${{ matrix.harness }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false

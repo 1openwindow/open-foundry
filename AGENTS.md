@@ -30,5 +30,7 @@ with these. When a tradeoff isn't covered here, ask.
 ## Releasing the runtime image
 
 To release: bump `package.json` `version`, commit, push a `vX.Y.Z` tag. CI
-(`.github/workflows/runtime-image.yml`) builds and publishes
-`ghcr.io/<owner>/pi-foundry-runtime:{X.Y.Z, X.Y, latest}`. Never `docker push` by hand.
+(`.github/workflows/runtime-image.yml`) builds and publishes both harness images
+`ghcr.io/<owner>/pi-foundry-runtime:{X.Y.Z, X.Y, latest}` (pi) and
+`ghcr.io/<owner>/ghcp-foundry-runtime:{X.Y.Z, X.Y, latest}` (GitHub Copilot).
+Never `docker push` by hand.
