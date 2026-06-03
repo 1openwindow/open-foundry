@@ -44,7 +44,7 @@ export const contract = {
       { name: "PI_MOCK", default: "0", accepts: ["0", "1", "true", "false"] },
       { name: "PI_MODEL_AUTH", default: "apikey", accepts: ["apikey", "managed-identity"], note: "managed-identity mints AAD bearer tokens via DefaultAzureCredential; no PI_OPENAI_API_KEY needed. Not supported with HARNESS=copilot." },
       { name: "FOUNDRY_TOKEN_SCOPE", default: "https://cognitiveservices.azure.com/.default", note: "AAD scope used when PI_MODEL_AUTH=managed-identity." },
-      { name: "COPILOT_PROVIDER_TYPE", default: "(auto)", accepts: ["azure", "openai", "anthropic"], note: "HARNESS=copilot BYOK provider type. Auto-detected from PI_OPENAI_BASE_URL (azure when the host is *.azure.com)." },
+      { name: "COPILOT_PROVIDER_TYPE", default: "(auto)", accepts: ["azure", "openai"], note: "HARNESS=copilot BYOK provider type. Auto-detected from PI_OPENAI_BASE_URL (azure when the host is *.azure.com)." },
       { name: "COPILOT_WIRE_API", default: "completions", accepts: ["responses", "completions"], note: "HARNESS=copilot BYOK wire API format." },
       { name: "COPILOT_API_VERSION", default: "2025-04-01-preview", note: "HARNESS=copilot Azure provider api-version." },
       { name: "REQUEST_TIMEOUT_MS", default: "300000" },

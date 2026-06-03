@@ -93,8 +93,7 @@
         "default": "(auto)",
         "accepts": [
           "azure",
-          "openai",
-          "anthropic"
+          "openai"
         ],
         "note": "HARNESS=copilot BYOK provider type. Auto-detected from PI_OPENAI_BASE_URL (azure when the host is *.azure.com)."
       },
