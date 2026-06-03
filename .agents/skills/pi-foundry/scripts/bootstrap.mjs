@@ -22,7 +22,7 @@ import { access, copyFile, mkdir, readFile, rename, writeFile } from "node:fs/pr
 import { constants } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { installCrashHandlers, loadContract, parseArgs } from "./_lib.mjs";
+import { installCrashHandlers, loadContract, parseArgs, inferHarnessFromRuntimeImage } from "./_lib.mjs";
 
 installCrashHandlers();
 
@@ -87,6 +87,14 @@ for (const target of targets) {
 
 console.log("");
 console.log(`pi-foundry bootstrap complete for ${agentName}.`);
+
+const harness = inferHarnessFromRuntimeImage(runtimeImage);
+if (harness === "unknown") {
+  console.log(`note: could not infer the harness from "${runtimeImage}"; ensure the image bakes ENV HARNESS=pi or copilot (pi-foundry-runtime = pi, ghcp-foundry-runtime = copilot).`);
+} else {
+  console.log(`harness: ${harness} (from runtime image)`);
+}
+
 console.log("Next:");
 console.log("  1. node <skill>/scripts/configure-env.mjs --env-name <env> --agent-name <name> --model <model> ...");
 console.log("  2. azd deploy");

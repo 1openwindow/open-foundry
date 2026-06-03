@@ -26,7 +26,7 @@
 //   --mock <0|1>                             Default 0.
 //   --timeout-ms <ms>                        Default 600000.
 
-import { installCrashHandlers, loadContract, parseArgs, parseDotenv, run, tryRun, isSecretName } from "./_lib.mjs";
+import { installCrashHandlers, loadContract, parseArgs, parseDotenv, run, tryRun, isSecretName, inferHarnessFromDockerfile } from "./_lib.mjs";
 import { readFileSync } from "node:fs";
 
 installCrashHandlers();
@@ -109,6 +109,20 @@ if (modelAuth) {
 }
 
 const keyless = modelAuth === "managed-identity";
+
+// Local preflight: the runtime image is the harness selector, so read the
+// bootstrapped Dockerfile to catch the copilot + managed-identity trap here
+// instead of at first invocation. Copilot BYOK is API-key only.
+if (keyless) {
+  const { harness, found } = inferHarnessFromDockerfile("Dockerfile");
+  if (harness === "copilot") {
+    throw new Error("--model-auth managed-identity is not supported on the Copilot harness (ghcp-foundry-runtime); Copilot BYOK is API-key only. Use --api-key-env, or switch to a pi-foundry-runtime image.");
+  }
+  if (!found || harness === "unknown") {
+    console.log("note: could not confirm the harness from ./Dockerfile; if this is a Copilot (ghcp-foundry-runtime) image, managed-identity will be rejected at startup (Copilot BYOK is API-key only).");
+  }
+}
+
 if (args["api-key-env"]) {
   const secret = process.env[args["api-key-env"]];
   if (!secret) throw new Error(`Environment variable ${args["api-key-env"]} is not set`);

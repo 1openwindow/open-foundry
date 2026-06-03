@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseDotenv, isSecretName, redact, parseArgs } from "../.agents/skills/pi-foundry/scripts/_lib.mjs";
+import { parseDotenv, isSecretName, redact, parseArgs, inferHarnessFromRuntimeImage, runtimeImageFromDockerfileText } from "../.agents/skills/pi-foundry/scripts/_lib.mjs";
 
 describe("parseDotenv", () => {
   it("parses bare KEY=value lines", () => {
@@ -96,5 +96,44 @@ describe("parseArgs", () => {
     assert.throws(() => parseArgs(["--cpu"]), /Missing value for --cpu/);
     // The next token starting with -- should also be treated as missing-value, not consumed.
     assert.throws(() => parseArgs(["--cpu", "--memory", "4Gi"]), /Missing value for --cpu/);
+  });
+});
+
+describe("inferHarnessFromRuntimeImage", () => {
+  it("maps pi-foundry-runtime to pi", () => {
+    assert.equal(inferHarnessFromRuntimeImage("ghcr.io/1openwindow/pi-foundry-runtime:0.1"), "pi");
+    assert.equal(inferHarnessFromRuntimeImage("myacr.azurecr.io/pi-foundry-runtime:latest"), "pi");
+  });
+
+  it("maps ghcp-foundry-runtime to copilot", () => {
+    assert.equal(inferHarnessFromRuntimeImage("ghcr.io/1openwindow/ghcp-foundry-runtime:0.1"), "copilot");
+    assert.equal(inferHarnessFromRuntimeImage("myacr.azurecr.io/ghcp-foundry-runtime@sha256:abc"), "copilot");
+  });
+
+  it("returns unknown for unrecognized or renamed images", () => {
+    assert.equal(inferHarnessFromRuntimeImage("myacr.azurecr.io/my-agent-runtime:latest"), "unknown");
+    assert.equal(inferHarnessFromRuntimeImage(""), "unknown");
+    assert.equal(inferHarnessFromRuntimeImage(undefined), "unknown");
+  });
+
+  it("does not confuse a registry port with an image tag", () => {
+    assert.equal(inferHarnessFromRuntimeImage("localhost:5000/ghcp-foundry-runtime"), "copilot");
+  });
+});
+
+describe("runtimeImageFromDockerfileText", () => {
+  it("resolves FROM ${PI_FOUNDRY_RUNTIME_IMAGE} via the ARG default", () => {
+    const text = "ARG PI_FOUNDRY_RUNTIME_IMAGE=myacr.azurecr.io/ghcp-foundry-runtime:1.0\nFROM ${PI_FOUNDRY_RUNTIME_IMAGE}\nCOPY . /workspace\n";
+    assert.equal(runtimeImageFromDockerfileText(text), "myacr.azurecr.io/ghcp-foundry-runtime:1.0");
+  });
+
+  it("prefers a literal FROM image when the user inlined it", () => {
+    const text = "FROM myacr.azurecr.io/pi-foundry-runtime:2.0\nCOPY . /workspace\n";
+    assert.equal(runtimeImageFromDockerfileText(text), "myacr.azurecr.io/pi-foundry-runtime:2.0");
+  });
+
+  it("returns undefined when no image is present", () => {
+    assert.equal(runtimeImageFromDockerfileText("# just a comment\n"), undefined);
+    assert.equal(runtimeImageFromDockerfileText(""), undefined);
   });
 });

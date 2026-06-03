@@ -84,15 +84,19 @@ Rules:
    - **User Pi agent repo**: has `.agents/skills/` (with skills other than `pi-foundry`), `prompts/`, `mcp.config.json`, or similar.
    - **Already bootstrapped repo**: has `agent.yaml` with `kind: hosted` and pi-foundry-style env vars.
    - **pi-foundry development checkout**: has `Dockerfile.runtime` and `.agents/skills/pi-foundry/SKILL.md`. **Do not bootstrap here.**
-2. Use plain commands: `pwd`, `ls -la`, `cat azure.yaml 2>/dev/null`, `git status --short`. No special inspect script.
-3. State what you plan to do before running any mutating command.
+2. Determine the harness from the **runtime image** — never from repo structure:
+   - **Already bootstrapped**: read the runtime image out of the root `Dockerfile` (`ARG PI_FOUNDRY_RUNTIME_IMAGE=` / `FROM`). `pi-foundry-runtime` ⇒ pi, `ghcp-foundry-runtime` ⇒ copilot. `bootstrap.mjs` and `configure-env.mjs` do this inference for you.
+   - **Not yet bootstrapped**: there is nothing to infer from. Ask the user which runtime image to use; default to `pi-foundry-runtime` (pi) unless they ask for Copilot, then use `ghcp-foundry-runtime`.
+   - Repo files like `.github/agents/*.md`, `.github/copilot-instructions.md`, or `.pi/settings.json` are at most a **hint** ("this looks like it may be aimed at Copilot/pi") — they never decide the harness. If an image name is custom/unrecognizable, ask the user "is this a pi or copilot image?".
+3. Use plain commands: `pwd`, `ls -la`, `cat azure.yaml 2>/dev/null`, `git status --short`. No special inspect script.
+4. State what you plan to do before running any mutating command.
 
 ## Required inputs
 
 Ask the user only for what you can't infer:
 
 - **Agent name** — default to a sanitized version of the repo directory name. Lowercase a-z/0-9/hyphen, 3-64 chars.
-- **Runtime image** — for a quick trial, `ghcr.io/1openwindow/pi-foundry-runtime:0.1` works out of the box. For production, pin an exact version or provide your own like `<acr>.azurecr.io/pi-foundry-runtime:<tag>`; see [docs/runtime-image.md](https://github.com/1openwindow/pi-foundry/blob/main/docs/runtime-image.md) for how to build/publish one.
+- **Runtime image** — this is also the **harness selector**. `pi-foundry-runtime` runs pi; `ghcp-foundry-runtime` runs GitHub Copilot. Default to `pi-foundry-runtime` unless the user asks for Copilot. For a quick trial, `ghcr.io/1openwindow/pi-foundry-runtime:0.1` works out of the box. For production, pin an exact version or provide your own like `<acr>.azurecr.io/pi-foundry-runtime:<tag>`; see [docs/runtime-image.md](https://github.com/1openwindow/pi-foundry/blob/main/docs/runtime-image.md) for how to build/publish one.
 - **Model** — `PI_OPENAI_MODEL`, e.g. `gpt-4.1-mini`. Default `PI_ARGS` is built from it.
 - **OpenAI-compatible endpoint** — `PI_OPENAI_BASE_URL`, usually `https://<account>.cognitiveservices.azure.com/openai/v1`.
 - **Foundry project + subscription** — `FOUNDRY_PROJECT_ENDPOINT` (e.g. `https://<account>.services.ai.azure.com/api/projects/<project>`), `AZURE_SUBSCRIPTION_ID`, `AZURE_LOCATION`. `configure-env.mjs` derives `AZURE_AI_PROJECT_ID` (the project's ARM resource id, required by `azd deploy`) and `AZURE_TENANT_ID` from these automatically; if derivation fails it prints how to pass them explicitly.
@@ -167,9 +171,10 @@ node <skill>/scripts/configure-env.mjs --env-name <env> --agent-name <name> \
   --model <model> --base-url <url> --api-key-env <ENV>
 ```
 
-Copilot BYOK is API-key only, so `--model-auth managed-identity` is rejected at startup. The
-verified `COPILOT_*` defaults need no flags; override them in `agent.yaml` + `agent.manifest.yaml`
-if needed.
+Copilot BYOK is API-key only, so `--model-auth managed-identity` is rejected — `configure-env.mjs`
+catches it locally (by reading the runtime image from `./Dockerfile`) and the runtime rejects it at
+startup as a backstop. The verified `COPILOT_*` defaults need no flags; override them in `agent.yaml`
++ `agent.manifest.yaml` if needed.
 
 ### Verify
 

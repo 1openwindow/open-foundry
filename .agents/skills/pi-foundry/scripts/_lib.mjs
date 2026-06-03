@@ -120,6 +120,52 @@ export function parseArgs(argv, { flags = [] } = {}) {
   return result;
 }
 
+// Harness inference. The runtime image is the single source of truth for the
+// harness (pi vs copilot); these helpers only *read* that choice for local
+// preflight and UX hints. They never decide the harness from repo structure.
+export function inferHarnessFromRuntimeImage(image) {
+  if (!image || typeof image !== "string") return "unknown";
+  // Drop digest and tag, then take the final path segment (the repository name).
+  const ref = image.split("@")[0];
+  const lastColon = ref.lastIndexOf(":");
+  const lastSlash = ref.lastIndexOf("/");
+  const noTag = lastColon > lastSlash ? ref.slice(0, lastColon) : ref;
+  const name = noTag.slice(noTag.lastIndexOf("/") + 1);
+  if (name.includes("ghcp-foundry-runtime")) return "copilot";
+  if (name.includes("pi-foundry-runtime")) return "pi";
+  return "unknown";
+}
+
+// Parse the runtime image out of a bootstrapped Dockerfile. The template is:
+//   ARG PI_FOUNDRY_RUNTIME_IMAGE=<image>
+//   FROM ${PI_FOUNDRY_RUNTIME_IMAGE}
+// but a user may have inlined the image into FROM directly, so handle both.
+export function runtimeImageFromDockerfileText(text) {
+  if (!text) return undefined;
+  let argDefault;
+  let fromRef;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    const arg = line.match(/^ARG\s+PI_FOUNDRY_RUNTIME_IMAGE=(.+)$/i);
+    if (arg) argDefault = arg[1].trim();
+    const from = line.match(/^FROM\s+(\S+)/i);
+    if (from) fromRef = from[1].trim();
+  }
+  if (fromRef && /^\$\{?PI_FOUNDRY_RUNTIME_IMAGE\}?$/.test(fromRef)) return argDefault;
+  return fromRef ?? argDefault;
+}
+
+export function inferHarnessFromDockerfile(path = "Dockerfile") {
+  let text;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch {
+    return { harness: "unknown", image: undefined, found: false };
+  }
+  const image = runtimeImageFromDockerfileText(text);
+  return { harness: inferHarnessFromRuntimeImage(image), image, found: true };
+}
+
 export function fail(message) {
   console.error(message instanceof Error ? message.message : String(message));
   process.exit(1);
