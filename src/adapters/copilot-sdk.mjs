@@ -41,7 +41,7 @@ export function createCopilotSdkAdapter({
   function buildProvider() {
     const explicitType = (process.env.COPILOT_PROVIDER_TYPE ?? "").trim().toLowerCase();
     const type = explicitType || (/\.azure\.com|azure/i.test(foundryOpenAIBaseUrl) ? "azure" : "openai");
-    const wireApi = (process.env.COPILOT_WIRE_API ?? "responses").trim().toLowerCase();
+    const wireApi = (process.env.COPILOT_WIRE_API ?? "completions").trim().toLowerCase();
     const apiKey = resolveApiKey();
     const baseUrl = type === "azure"
       ? normalizeAzureBaseUrl(foundryOpenAIBaseUrl)
