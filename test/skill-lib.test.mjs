@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseDotenv, isSecretName, redact, parseArgs, inferHarnessFromRuntimeImage, runtimeImageFromDockerfileText } from "../.agents/skills/pi-foundry/scripts/_lib.mjs";
+import { parseDotenv, isSecretName, redact, parseArgs, inferHarnessFromRuntimeImage, runtimeImageFromDockerfileText, resolveModelAuth } from "../.agents/skills/pi-foundry/scripts/_lib.mjs";
 
 describe("parseDotenv", () => {
   it("parses bare KEY=value lines", () => {
@@ -135,5 +135,20 @@ describe("runtimeImageFromDockerfileText", () => {
   it("returns undefined when no image is present", () => {
     assert.equal(runtimeImageFromDockerfileText("# just a comment\n"), undefined);
     assert.equal(runtimeImageFromDockerfileText(""), undefined);
+  });
+});
+
+describe("resolveModelAuth", () => {
+  it("defaults Copilot deployments to apikey to clear stale keyless env", () => {
+    assert.equal(resolveModelAuth({ harness: "copilot" }), "apikey");
+  });
+
+  it("preserves explicit or file-provided auth values", () => {
+    assert.equal(resolveModelAuth({ argValue: "managed-identity", harness: "copilot" }), "managed-identity");
+    assert.equal(resolveModelAuth({ fileValue: "managed-identity", harness: "pi" }), "managed-identity");
+  });
+
+  it("does not invent an auth env value for pi deployments", () => {
+    assert.equal(resolveModelAuth({ harness: "pi" }), undefined);
   });
 });

@@ -3,13 +3,14 @@
 This document is a generic, copy-pasteable remote-deploy reference. It assumes
 you already used the pi-foundry skill (or `node <skill>/scripts/bootstrap.mjs`)
 to add the 5 standard files (`Dockerfile`, `azure.yaml`, `agent.yaml`,
-`agent.manifest.yaml`, `.dockerignore`) to your Pi agent repo.
+`agent.manifest.yaml`, `.dockerignore`) to your agent repo.
 
 Substitute `<placeholders>` with your own values. **No defaults point at any
 maintainer endpoint** — pi-foundry fails fast when required values are missing.
 
 For day-to-day deploys, the recommended interface is the pi-foundry skill; ask
-Pi to deploy the current repo. The commands below are the underlying primitives.
+your agent to deploy the current repo. The commands below are the underlying
+primitives.
 
 ## Prerequisites
 
@@ -33,11 +34,17 @@ You also need:
 
 - a Foundry project (subscription, location, project endpoint),
 - an Azure Container Registry your Foundry project can pull from,
-- a published `pi-foundry-runtime` image in that registry (see
-  [docs/runtime-image.md](./docs/runtime-image.md)),
-- a Foundry OpenAI-compatible endpoint, model name, and either an API key
-  (`PI_MODEL_AUTH=apikey`, default) or a managed-identity data-plane role
-  assignment on the model resource (`PI_MODEL_AUTH=managed-identity`, keyless).
+- a published runtime image in that registry (see
+  [docs/runtime-image.md](./docs/runtime-image.md)): `pi-foundry-runtime` for Pi
+  or `ghcp-foundry-runtime` for GitHub Copilot,
+- a Foundry OpenAI-compatible endpoint, model name, and an API key
+  (`PI_MODEL_AUTH=apikey`, default). The Pi runtime also supports a
+  managed-identity data-plane role assignment on the model resource
+  (`PI_MODEL_AUTH=managed-identity`, keyless); the GitHub Copilot runtime does
+  not.
+
+The runtime image name is the harness selector. Do not set a separate `HARNESS`
+azd env value for normal deployments.
 
 ## Configure the azd environment
 
@@ -45,7 +52,7 @@ The skill's `configure-env.mjs` wraps these commands and never prints secret
 values. The raw commands are:
 
 ```bash
-cd <your-pi-agent-repo>
+cd <your-agent-repo>
 azd env new <env-name>            # or: azd env select <env-name>
 
 azd env set AZURE_SUBSCRIPTION_ID '<subscription-id>'
@@ -62,10 +69,12 @@ azd env set PI_OPENAI_MODEL    '<model>'
 # Pass the secret as KEY=value to avoid azd reparsing leading -- characters:
 azd env set "PI_OPENAI_API_KEY=$PI_OPENAI_API_KEY"
 
-# Keyless alternative (no PI_OPENAI_API_KEY): mint AAD tokens via the Hosted Agent's
-# managed identity. Requires the agent identity to have a Cognitive Services / Azure
-# OpenAI data-plane role on the model resource. After the first `azd deploy` (the
-# identity only exists once deployed), grant it with:
+# Pi runtime only: keyless alternative (no PI_OPENAI_API_KEY), minting AAD tokens
+# via the Hosted Agent's managed identity. Copilot BYOK is API-key only; do not
+# use PI_MODEL_AUTH=managed-identity with ghcp-foundry-runtime. Keyless Pi requires
+# the agent identity to have a Cognitive Services / Azure OpenAI data-plane role
+# on the model resource. After the first `azd deploy` (the identity only exists
+# once deployed), grant it with:
 #   node <skill>/scripts/grant-model-access.mjs   # Cognitive Services OpenAI User, idempotent
 # then redeploy. Manual equivalent:
 # azd env set PI_MODEL_AUTH managed-identity
@@ -91,6 +100,7 @@ If you have Docker locally, you can additionally run the runtime image smoke:
 
 ```bash
 PI_FOUNDRY_RUNTIME_IMAGE=<acr>.azurecr.io/pi-foundry-runtime:<tag> npm run runtime:smoke
+PI_FOUNDRY_RUNTIME_IMAGE=<acr>.azurecr.io/ghcp-foundry-runtime:<tag> npm run runtime:smoke
 ```
 
 Inside the runtime container (or attached to a running one), validate the

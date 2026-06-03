@@ -166,6 +166,10 @@ export function inferHarnessFromDockerfile(path = "Dockerfile") {
   return { harness: inferHarnessFromRuntimeImage(image), image, found: true };
 }
 
+export function resolveModelAuth({ argValue, fileValue, harness }) {
+  return argValue || fileValue || (harness === "copilot" ? "apikey" : undefined);
+}
+
 export function fail(message) {
   console.error(message instanceof Error ? message.message : String(message));
   process.exit(1);

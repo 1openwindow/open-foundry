@@ -26,7 +26,7 @@
 //   --mock <0|1>                             Default 0.
 //   --timeout-ms <ms>                        Default 600000.
 
-import { installCrashHandlers, loadContract, parseArgs, parseDotenv, run, tryRun, isSecretName, inferHarnessFromDockerfile } from "./_lib.mjs";
+import { installCrashHandlers, loadContract, parseArgs, parseDotenv, run, tryRun, isSecretName, inferHarnessFromDockerfile, resolveModelAuth } from "./_lib.mjs";
 import { readFileSync } from "node:fs";
 
 installCrashHandlers();
@@ -41,6 +41,7 @@ See script header for the option list.`);
 
 const contract = await loadContract();
 const fileValues = args["from-env-file"] ? parseDotenv(readFileSync(args["from-env-file"], "utf8")) : {};
+const dockerfileHarness = inferHarnessFromDockerfile("Dockerfile");
 
 if (args["env-name"]) {
   if (tryRun("azd", ["env", "select", args["env-name"]]) === undefined) {
@@ -97,15 +98,16 @@ if (model) {
 azdSet("PI_OPENAI_BASE_URL", prefer(args["base-url"], fileValues.PI_OPENAI_BASE_URL));
 
 // Model auth mode: apikey (default, BYOK) or managed-identity (keyless). Validated against
-// the contract so accepted values stay in sync with the runtime.
-const modelAuth = prefer(args["model-auth"], fileValues.PI_MODEL_AUTH);
+// the contract so accepted values stay in sync with the runtime. When the runtime image is
+// Copilot, force the explicit apikey default so any stale azd PI_MODEL_AUTH=managed-identity
+// from a prior pi deployment is overwritten before deploy.
+const modelAuth = resolveModelAuth({ argValue: args["model-auth"], fileValue: fileValues.PI_MODEL_AUTH, harness: dockerfileHarness.harness });
 if (modelAuth) {
   const spec = contract.env.runtime.find((knob) => knob.name === "PI_MODEL_AUTH");
   const accepts = spec?.accepts ?? ["apikey", "managed-identity"];
   if (!accepts.includes(modelAuth)) {
     throw new Error(`Invalid --model-auth '${modelAuth}'; expected one of: ${accepts.join(", ")}`);
   }
-  azdSet("PI_MODEL_AUTH", modelAuth);
 }
 
 const keyless = modelAuth === "managed-identity";
@@ -114,14 +116,14 @@ const keyless = modelAuth === "managed-identity";
 // bootstrapped Dockerfile to catch the copilot + managed-identity trap here
 // instead of at first invocation. Copilot BYOK is API-key only.
 if (keyless) {
-  const { harness, found } = inferHarnessFromDockerfile("Dockerfile");
-  if (harness === "copilot") {
+  if (dockerfileHarness.harness === "copilot") {
     throw new Error("--model-auth managed-identity is not supported on the Copilot harness (ghcp-foundry-runtime); Copilot BYOK is API-key only. Use --api-key-env, or switch to a pi-foundry-runtime image.");
   }
-  if (!found || harness === "unknown") {
+  if (!dockerfileHarness.found || dockerfileHarness.harness === "unknown") {
     console.log("note: could not confirm the harness from ./Dockerfile; if this is a Copilot (ghcp-foundry-runtime) image, managed-identity will be rejected at startup (Copilot BYOK is API-key only).");
   }
 }
+if (modelAuth) azdSet("PI_MODEL_AUTH", modelAuth);
 
 if (args["api-key-env"]) {
   const secret = process.env[args["api-key-env"]];
