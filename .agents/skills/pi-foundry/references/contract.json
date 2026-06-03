@@ -100,7 +100,7 @@
       },
       {
         "name": "COPILOT_WIRE_API",
-        "default": "responses",
+        "default": "completions",
         "accepts": [
           "responses",
           "completions"
