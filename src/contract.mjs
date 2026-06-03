@@ -69,6 +69,18 @@ export function validateRuntimeEnv(env, { mock } = {}) {
   if (harness === "copilot" && String(env.PI_MODEL_AUTH ?? "").trim().toLowerCase() === "managed-identity") {
     issues.push({ severity: "error", name: "PI_MODEL_AUTH", message: "HARNESS=copilot does not support PI_MODEL_AUTH=managed-identity; Copilot BYOK requires an API key (set PI_OPENAI_API_KEY)." });
   }
+  // Validate Copilot knobs at startup so a typo fails fast here, not as an opaque
+  // SDK error on the first invocation. Only enforced for the copilot harness.
+  if (harness === "copilot") {
+    for (const name of ["COPILOT_PROVIDER_TYPE", "COPILOT_WIRE_API"]) {
+      const value = String(env[name] ?? "").trim().toLowerCase();
+      if (!value) continue;
+      const accepts = contract.env.runtime.find((knob) => knob.name === name)?.accepts ?? [];
+      if (!accepts.includes(value)) {
+        issues.push({ severity: "error", name, message: `${name} must be one of ${accepts.join(", ")} (got "${value}").` });
+      }
+    }
+  }
   if (!mock) {
     const keyless = harness !== "copilot" && String(env.PI_MODEL_AUTH ?? "").trim().toLowerCase() === "managed-identity";
     const required = keyless ? contract.env.requiredWhenLiveKeyless : contract.env.requiredWhenLive;

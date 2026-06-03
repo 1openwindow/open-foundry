@@ -3,7 +3,7 @@
 #
 # To add your own env var (e.g. GITHUB_TOKEN), append an entry below AND in agent.manifest.yaml,
 # then `azd env set GITHUB_TOKEN=...`. Avoid AGENT_*/FOUNDRY_* prefixes (Foundry-reserved).
-# HARNESS selects the runtime; copilot needs the ghcp-foundry-runtime image.
+# The harness (pi vs copilot) is fixed by the runtime image, not set here.
 kind: hosted
 name: <agent-name>
 protocols:
@@ -14,8 +14,6 @@ resources:
   cpu: "2"
   memory: 4Gi
 environment_variables:
-  - name: HARNESS
-    value: ${HARNESS}
   - name: PI_ARGS
     value: ${PI_ARGS}
   - name: PI_MOCK

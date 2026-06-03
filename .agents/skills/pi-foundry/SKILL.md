@@ -157,18 +157,19 @@ It resolves the agent's Instance Identity Principal ID from `azd ai agent show`,
 
 ### GitHub Copilot harness
 
-To run on the Copilot harness instead of pi:
-
-- Use a `ghcp-foundry-runtime` image (the `pi-foundry-runtime` image has no Copilot).
-- Add `--harness copilot` to `configure-env.mjs`.
+The harness is fixed by the runtime image — there is no `HARNESS` knob to set. To run on
+GitHub Copilot instead of pi, bootstrap with a `ghcp-foundry-runtime` image (the
+`pi-foundry-runtime` image has no Copilot, and vice versa); everything else is identical.
 
 ```text
 node <skill>/scripts/bootstrap.mjs --agent-name <name> --runtime-image <acr>/ghcp-foundry-runtime:<tag>
-node <skill>/scripts/configure-env.mjs --env-name <env> --agent-name <name> --harness copilot \
+node <skill>/scripts/configure-env.mjs --env-name <env> --agent-name <name> \
   --model <model> --base-url <url> --api-key-env <ENV>
 ```
 
-Copilot BYOK is API-key only, so `--model-auth managed-identity` is rejected. The verified `COPILOT_*` defaults need no flags; override them in `agent.yaml` + `agent.manifest.yaml` if needed.
+Copilot BYOK is API-key only, so `--model-auth managed-identity` is rejected at startup. The
+verified `COPILOT_*` defaults need no flags; override them in `agent.yaml` + `agent.manifest.yaml`
+if needed.
 
 ### Verify
 

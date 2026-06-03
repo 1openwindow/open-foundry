@@ -1,8 +1,9 @@
 FROM node:24-bookworm-slim
 
-# Build one image per harness; each image bundles only its own runtime.
+# Build one image per harness; each image bundles only its own runtime, and its
+# baked ENV HARNESS makes the image itself the harness selector (zero config).
 #   HARNESS=pi       -> installs pi-coding-agent     (image: pi-foundry-runtime,   ~655MB)
-#   HARNESS=copilot  -> installs @github/copilot-sdk  (image: ghcp-foundry-runtime, ~1.6GB)
+#   HARNESS=copilot  -> installs @github/copilot-sdk  (image: ghcp-foundry-runtime, ~1.75GB)
 ARG HARNESS=pi
 ENV HARNESS=${HARNESS}
 

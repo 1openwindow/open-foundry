@@ -122,4 +122,21 @@ describe("validateRuntimeEnv", () => {
     );
     assert.deepEqual(issues.filter((i) => i.severity === "error"), []);
   });
+
+  it("rejects an invalid COPILOT_WIRE_API only under the copilot harness", () => {
+    const base = { PI_OPENAI_API_KEY: "sk-x", PI_OPENAI_BASE_URL: "https://x", PI_OPENAI_MODEL: "gpt-4.1-mini" };
+    const copilot = validateRuntimeEnv({ HARNESS: "copilot", COPILOT_WIRE_API: "bogus", ...base }, { mock: false });
+    assert.ok(copilot.some((i) => i.severity === "error" && i.name === "COPILOT_WIRE_API"));
+    // pi never reads COPILOT_*, so the same typo must not error there.
+    const pi = validateRuntimeEnv({ COPILOT_WIRE_API: "bogus", ...base }, { mock: false });
+    assert.equal(pi.filter((i) => i.name === "COPILOT_WIRE_API").length, 0);
+  });
+
+  it("rejects an invalid COPILOT_PROVIDER_TYPE under the copilot harness", () => {
+    const issues = validateRuntimeEnv(
+      { HARNESS: "copilot", COPILOT_PROVIDER_TYPE: "anthropic", PI_OPENAI_API_KEY: "sk-x", PI_OPENAI_BASE_URL: "https://x", PI_OPENAI_MODEL: "gpt-4.1-mini" },
+      { mock: false },
+    );
+    assert.ok(issues.some((i) => i.severity === "error" && i.name === "COPILOT_PROVIDER_TYPE"));
+  });
 });
