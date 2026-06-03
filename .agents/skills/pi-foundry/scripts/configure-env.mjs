@@ -12,6 +12,8 @@
 //   --env-name <name>                        Create/select azd env if needed.
 //   --from-env-file <path>                   Whitelisted copy from a dotenv file (no AGENT_*).
 //   --agent-name <name>                      (required) Agent name.
+//   --harness <pi|copilot>                   Runtime selector. Default pi. copilot requires the
+//                                            ghcp-foundry-runtime image and apikey BYOK (no managed-identity).
 //   --acr <registry.azurecr.io>
 //   --foundry-project-endpoint <url>
 //   --azure-ai-project-id <resource-id>
@@ -85,6 +87,18 @@ azdSet("PI_MOCK", prefer(args.mock, fileValues.PI_MOCK, "0"));
 azdSet("REQUEST_TIMEOUT_MS", prefer(args["timeout-ms"], fileValues.REQUEST_TIMEOUT_MS, "600000"));
 azdSet("ENABLE_DIAGNOSTICS", prefer(fileValues.ENABLE_DIAGNOSTICS, "0"));
 
+// Harness selector: pi (default) or copilot. Validated against the contract so accepted
+// values stay in sync with the runtime. Always set so the template never expands HARNESS to "".
+const harness = prefer(args.harness, fileValues.HARNESS, "pi");
+{
+  const spec = contract.env.runtime.find((knob) => knob.name === "HARNESS");
+  const accepts = spec?.accepts ?? ["pi", "copilot"];
+  if (!accepts.includes(harness)) {
+    throw new Error(`Invalid --harness '${harness}'; expected one of: ${accepts.join(", ")}`);
+  }
+  azdSet("HARNESS", harness);
+}
+
 // Model
 const model = prefer(args.model, fileValues.PI_OPENAI_MODEL);
 if (model) {
@@ -101,6 +115,9 @@ if (modelAuth) {
   const accepts = spec?.accepts ?? ["apikey", "managed-identity"];
   if (!accepts.includes(modelAuth)) {
     throw new Error(`Invalid --model-auth '${modelAuth}'; expected one of: ${accepts.join(", ")}`);
+  }
+  if (harness === "copilot" && modelAuth === "managed-identity") {
+    throw new Error("HARNESS=copilot does not support --model-auth managed-identity; Copilot BYOK requires an API key (use --api-key-env).");
   }
   azdSet("PI_MODEL_AUTH", modelAuth);
 }

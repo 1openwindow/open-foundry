@@ -34,7 +34,8 @@ const requestTimeoutMs = Number.parseInt(process.env.REQUEST_TIMEOUT_MS ?? "3000
 // silent phases (tool execution, uploads) keep the gateway idle timer from firing.
 // Set to 0 to disable. Default 20s gives a ~6x margin under the observed ~120s cap.
 const sseHeartbeatMs = Number.parseInt(process.env.SSE_HEARTBEAT_MS ?? "20000", 10);
-const harness = (process.env.HARNESS ?? "pi").trim().toLowerCase();
+// Blank (e.g. an azd env var that expands to "") is treated as the default pi.
+const harness = (process.env.HARNESS ?? "").trim().toLowerCase() || "pi";
 const piBin = process.env.PI_BIN ?? "pi";
 const piArgs = parseArgs(process.env.PI_ARGS ?? "--mode rpc --no-session");
 const mock = process.env.PI_MOCK === "1" || process.env.PI_MOCK === "true";

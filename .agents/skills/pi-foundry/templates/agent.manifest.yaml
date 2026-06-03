@@ -17,6 +17,8 @@ template:
       version: 1.0.0
   image: "{{CONTAINER_IMAGE}}"
   environment_variables:
+    - name: HARNESS
+      value: "{{HARNESS}}"
     - name: PI_ARGS
       value: "{{PI_ARGS}}"
     - name: PI_MOCK

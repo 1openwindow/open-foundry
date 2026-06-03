@@ -155,6 +155,21 @@ node <skill>/scripts/grant-model-access.mjs
 
 It resolves the agent's Instance Identity Principal ID from `azd ai agent show`, the model account scope from `AZURE_AI_PROJECT_ID`, and grants `Cognitive Services OpenAI User` via ARM REST (no `az` CLI needed; idempotent). Then redeploy so the new revision picks up keyless auth. Use `--dry-run` to preview the principal/scope/role first. The Instance Identity is stable across versions, so this is a one-time grant per agent.
 
+### GitHub Copilot harness
+
+To run the agent on the GitHub Copilot harness instead of pi, change two things:
+
+- **Image**: use a `ghcp-foundry-runtime` image (the `pi-foundry-runtime` image does not contain Copilot). Pass it to `bootstrap.mjs --runtime-image`.
+- **Harness**: add `--harness copilot` to `configure-env.mjs`.
+
+```text
+node <skill>/scripts/bootstrap.mjs --agent-name <name> --runtime-image <acr>/ghcp-foundry-runtime:<tag>
+node <skill>/scripts/configure-env.mjs --env-name <env> --agent-name <name> --harness copilot \
+  --model <model> --base-url <url> --api-key-env <ENV>
+```
+
+Copilot reaches the model through BYOK, which is **API-key only** — `--model-auth managed-identity` is rejected for Copilot. The verified defaults (`COPILOT_WIRE_API=completions`, `COPILOT_API_VERSION=2025-04-01-preview`, `COPILOT_PROVIDER_TYPE=azure`) need no flags; override them by appending env vars to `agent.yaml` + `agent.manifest.yaml` if required.
+
 ### Verify
 
 `verify.mjs` smoke-tests the deployed agent over the **invocations REST endpoint**. It does not use `azd ai agent invoke`, because Hosted Agent session creation currently requires the opt-in header `Foundry-Features: HostedAgents=V1Preview` that the CLI does not send (otherwise HTTP 403 `preview_feature_required`). The script mints a data-plane token with `azd auth token`, creates a session, and POSTs the invocation with that header. It auto-discovers the endpoint and agent name from `azd env` + `agent.yaml`. Pass `--session <id>` to reuse a session for continuity tests; omit it to start a new session.

@@ -98,6 +98,12 @@ describe("validateRuntimeEnv", () => {
     assert.equal(harnessErrors.length, 1);
   });
 
+  it("treats a blank HARNESS as the default pi (azd expands unset vars to '')", () => {
+    const issues = validateRuntimeEnv({ HARNESS: "", PI_MOCK: "1" }, { mock: true });
+    const harnessErrors = issues.filter((i) => i.severity === "error" && i.name === "HARNESS");
+    assert.deepEqual(harnessErrors, []);
+  });
+
   it("rejects HARNESS=copilot with PI_MODEL_AUTH=managed-identity (BYOK is apikey only)", () => {
     const issues = validateRuntimeEnv(
       { HARNESS: "copilot", PI_MODEL_AUTH: "managed-identity", PI_OPENAI_BASE_URL: "https://x", PI_OPENAI_MODEL: "gpt-4.1-mini" },

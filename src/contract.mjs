@@ -60,7 +60,7 @@ export const contract = {
 
 export function validateRuntimeEnv(env, { mock } = {}) {
   const issues = [];
-  const harness = String(env.HARNESS ?? "pi").trim().toLowerCase();
+  const harness = String(env.HARNESS ?? "").trim().toLowerCase() || "pi";
   if (harness !== "pi" && harness !== "copilot") {
     issues.push({ severity: "error", name: "HARNESS", message: `HARNESS must be one of pi, copilot (got "${harness}").` });
   }
