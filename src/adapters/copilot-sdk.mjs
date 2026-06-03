@@ -55,7 +55,7 @@ export function createCopilotSdkAdapter({
       modelId: foundryOpenAIModel,
       wireModel: foundryOpenAIModel,
       ...(type === "azure"
-        ? { azure: { apiVersion: (process.env.COPILOT_API_VERSION ?? "2024-10-21").trim() } }
+        ? { azure: { apiVersion: (process.env.COPILOT_API_VERSION ?? "2025-04-01-preview").trim() } }
         : {}),
     };
   }
