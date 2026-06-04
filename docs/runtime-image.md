@@ -156,10 +156,11 @@ pushes both image names:
 
 Triggers:
 
-- A pull request touching the runtime (`Dockerfile.runtime`, `src/**`, package
-  files, or the workflow) → builds both images for validation, pushes neither.
 - Push a tag `v<X.Y.Z>` → publishes `:<X.Y.Z>`, `:<X.Y>`, and `:latest` on both images.
 - `workflow_dispatch` → publishes `:sha-<short>` and `:manual-<run-number>` on both images (never `:latest`).
+
+`fail-fast` is off, so a break in one harness never cancels the other's
+build or publish.
 
 ```bash
 git tag v0.1.0
