@@ -15,8 +15,5 @@
   },
   "dependencies": {
     "@azure/identity": "^4.13.1"
-  },
-  "optionalDependencies": {
-    "@github/copilot-sdk": "^1.0.0-beta.12"
   }
 }

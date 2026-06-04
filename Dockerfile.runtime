@@ -1,11 +1,14 @@
-FROM node:24-bookworm-slim
+# Multi-stage runtime image: one shared `base`, one thin stage per harness.
+# Each harness stage only adds its own agent CLI/SDK on top of `base`; the
+# harness is selected at build time with `--target` (zero conditionals), and the
+# stage's baked ENV HARNESS makes the image itself the harness selector.
+#   --target pi       -> pi-coding-agent     (image: pi-foundry-runtime,   ~655MB)
+#   --target copilot  -> @github/copilot-sdk  (image: ghcp-foundry-runtime, ~1.75GB)
+# Adding a harness = add one `FROM base AS <name>` stage below (+ its adapter in
+# src/adapters and a case in src/adapters/index.mjs).
 
-# Build one image per harness; each image bundles only its own runtime, and its
-# baked ENV HARNESS makes the image itself the harness selector (zero config).
-#   HARNESS=pi       -> installs pi-coding-agent     (image: pi-foundry-runtime,   ~655MB)
-#   HARNESS=copilot  -> installs @github/copilot-sdk  (image: ghcp-foundry-runtime, ~1.75GB)
-ARG HARNESS=pi
-ENV HARNESS=${HARNESS}
+# --- shared base ------------------------------------------------------------
+FROM node:24-bookworm-slim AS base
 
 ENV NODE_ENV=production \
     PORT=8088 \
@@ -26,25 +29,33 @@ RUN apt-get update \
     && printf '#!/bin/sh\nexec node /app/src/cli.mjs "$@"\n' > /usr/local/bin/open-foundry \
     && chmod +x /usr/local/bin/open-foundry
 
-# pi harness only: the pi-coding-agent CLI is spawned over JSON-RPC.
-# Running `npm -g` as root populates the default cache (/home/node/.npm) with
-# root-owned files; hand it back to node so the later `npm ci` (USER node) works.
-RUN if [ "$HARNESS" = "pi" ]; then \
-        npm install -g @earendil-works/pi-coding-agent@0.76.0 --ignore-scripts \
-        && chown -R node:node /home/node/.npm; \
-    fi
-
 USER node
 WORKDIR /app
 
+# package.json holds only shared runtime deps; each harness stage installs its
+# own agent. Keeps every image slim and avoids cross-harness coupling.
 COPY --chown=node:node package.json package-lock.json ./
-# copilot harness pulls in optional deps (@github/copilot-sdk + CLI agent);
-# pi stays slim by omitting them.
-RUN if [ "$HARNESS" = "copilot" ]; then npm ci --omit=dev; \
-    else npm ci --omit=dev --omit=optional; fi
+RUN npm ci --omit=dev
 
 COPY --chown=node:node src ./src
 
 EXPOSE 8088
 # Single Node process serves /readiness and POST /invocations directly on PORT.
 CMD ["node", "/app/src/backend.mjs"]
+
+# --- pi harness -------------------------------------------------------------
+# pi-coding-agent is a global CLI spawned over JSON-RPC. The global install runs
+# as root and populates the default cache (/home/node/.npm) with root-owned
+# files; hand it back to node so nothing downstream hits EACCES.
+FROM base AS pi
+ENV HARNESS=pi
+USER root
+RUN npm install -g @earendil-works/pi-coding-agent@0.76.0 --ignore-scripts \
+    && chown -R node:node /home/node/.npm
+USER node
+
+# --- copilot harness --------------------------------------------------------
+# Copilot SDK / CLI runtime, loaded lazily by src/adapters/copilot-sdk.mjs.
+FROM base AS copilot
+ENV HARNESS=copilot
+RUN npm install --no-save @github/copilot-sdk@1.0.0-beta.12

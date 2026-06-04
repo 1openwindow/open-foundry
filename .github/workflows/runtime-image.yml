@@ -2,25 +2,38 @@ name: runtime-image
 
 # Builds Dockerfile.runtime and publishes it to GHCR.
 #
-# Two images are built per run, one per harness (same version tags, different name):
-#   pi      (default)  ->  ghcr.io/<owner>/pi-foundry-runtime:<tag>
-#   copilot            ->  ghcr.io/<owner>/ghcp-foundry-runtime:<tag>
+# Multi-stage Dockerfile: the harness is the build `--target`. One image is built
+# per harness (same version tags, different name):
+#   target pi       ->  ghcr.io/<owner>/pi-foundry-runtime:<tag>
+#   target copilot  ->  ghcr.io/<owner>/ghcp-foundry-runtime:<tag>
 #
 # Triggers:
+#   - pull_request touching the runtime  → builds both images, pushes neither
+#                                           (catches build breaks before a tag)
 #   - push a tag like  v0.2.0   → publishes  :0.2.0  :0.2  :latest  on both images
 #   - workflow_dispatch  → publishes :sha-<short> and :manual-<run-number>
 #                          on both images, never :latest
 #
+# fail-fast is off so a break in one harness never cancels the other's build or
+# publish; each harness's real status is always visible.
+#
 # Repo settings required (one-time):
 #   Settings → Actions → General → Workflow permissions = Read and write
 #   (or rely on the explicit `permissions:` block below — which we use).
-#   Each GHCR package (pi-foundry-runtime, ghcp-foundry-runtime) must be made
-#   public separately the first time it is published.
+#   Confirm each GHCR package (pi-foundry-runtime, ghcp-foundry-runtime) is
+#   public the first time it is published.
 
 on:
   push:
     tags:
       - "v*"
+  pull_request:
+    paths:
+      - "Dockerfile.runtime"
+      - "src/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/runtime-image.yml"
   workflow_dispatch:
 
 permissions:
@@ -31,20 +44,24 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - harness: pi
+          - target: pi
             image: pi-foundry-runtime
-          - harness: copilot
+          - target: copilot
             image: ghcp-foundry-runtime
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+      # PRs build for validation only; tags and manual dispatch publish.
+      PUSH: ${{ github.event_name != 'pull_request' }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
 
       - uses: docker/login-action@v3
+        if: ${{ env.PUSH == 'true' }}
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -66,9 +83,8 @@ jobs:
         with:
           context: .
           file: Dockerfile.runtime
-          push: true
-          build-args: |
-            HARNESS=${{ matrix.harness }}
+          target: ${{ matrix.target }}
+          push: ${{ env.PUSH == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false

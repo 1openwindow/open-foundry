@@ -25,9 +25,10 @@ to a registry your Foundry project can pull from.
 
 ## What is in the image
 
-`Dockerfile.runtime` builds one image per harness with `ARG HARNESS=pi|copilot`.
-Each image bakes `ENV HARNESS=<value>`, so there is no separate `HARNESS` setting
-to put in `azd` env, `agent.yaml`, or `agent.manifest.yaml`.
+`Dockerfile.runtime` is multi-stage: a shared `base` plus one thin stage per
+harness, selected with `docker build --target pi|copilot`. Each image bakes
+`ENV HARNESS=<value>`, so there is no separate `HARNESS` setting to put in `azd`
+env, `agent.yaml`, or `agent.manifest.yaml`.
 
 Both images include:
 
@@ -37,12 +38,12 @@ Both images include:
 - `open-foundry` CLI (`/usr/local/bin/open-foundry`) wrapping `src/cli.mjs`
 - `/app/src` (contract.mjs, cli.mjs, backend.mjs, adapters, runtime helpers)
 
-Harness-specific contents are intentionally separate:
+Harness-specific contents are intentionally separate. `package.json` carries
+only shared runtime deps; each harness stage installs its own agent:
 
-- `pi-foundry-runtime` installs `@earendil-works/pi-coding-agent` and omits the
-  optional Copilot SDK dependencies to stay small.
-- `ghcp-foundry-runtime` installs `@github/copilot-sdk` / Copilot CLI runtime and
-  does not install the pi CLI.
+- `pi-foundry-runtime` installs `@earendil-works/pi-coding-agent` only.
+- `ghcp-foundry-runtime` installs `@github/copilot-sdk` / Copilot CLI runtime
+  only.
 
 The runtime image deliberately does **not** include user agent assets
 (`.agents/skills`, prompts, MCP config, workspace). Those come from the user repo
@@ -76,11 +77,9 @@ OPEN_FOUNDRY_RUNTIME_IMAGE=pi-foundry-runtime:local npm run runtime:build
 Build the GitHub Copilot image:
 
 ```bash
-docker build --pull=false \
-  --build-arg HARNESS=copilot \
-  -f Dockerfile.runtime \
-  -t ghcp-foundry-runtime:local \
-  .
+OPEN_FOUNDRY_RUNTIME_TARGET=copilot \
+OPEN_FOUNDRY_RUNTIME_IMAGE=ghcp-foundry-runtime:local \
+npm run runtime:build
 ```
 
 ## Smoke locally (requires Docker)
@@ -104,7 +103,7 @@ Build the Pi image:
 az acr build \
   --registry <acr> \
   --image pi-foundry-runtime:<tag> \
-  --build-arg HARNESS=pi \
+  --target pi \
   --file Dockerfile.runtime \
   .
 ```
@@ -115,7 +114,7 @@ Build the GitHub Copilot image:
 az acr build \
   --registry <acr> \
   --image ghcp-foundry-runtime:<tag> \
-  --build-arg HARNESS=copilot \
+  --target copilot \
   --file Dockerfile.runtime \
   .
 ```
@@ -138,7 +137,7 @@ Or, for a non-ACR registry:
 OPEN_FOUNDRY_RUNTIME_IMAGE=ghcr.io/<org>/pi-foundry-runtime:<tag> npm run runtime:build
 docker push ghcr.io/<org>/pi-foundry-runtime:<tag>
 
-docker build --pull=false --build-arg HARNESS=copilot -f Dockerfile.runtime -t ghcr.io/<org>/ghcp-foundry-runtime:<tag> .
+docker build --pull=false --target copilot -f Dockerfile.runtime -t ghcr.io/<org>/ghcp-foundry-runtime:<tag> .
 docker push ghcr.io/<org>/ghcp-foundry-runtime:<tag>
 ```
 
@@ -157,6 +156,8 @@ pushes both image names:
 
 Triggers:
 
+- A pull request touching the runtime (`Dockerfile.runtime`, `src/**`, package
+  files, or the workflow) → builds both images for validation, pushes neither.
 - Push a tag `v<X.Y.Z>` → publishes `:<X.Y.Z>`, `:<X.Y>`, and `:latest` on both images.
 - `workflow_dispatch` → publishes `:sha-<short>` and `:manual-<run-number>` on both images (never `:latest`).
 
