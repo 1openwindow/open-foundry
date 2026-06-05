@@ -132,7 +132,7 @@ if (args["api-key-env"]) {
 } else if (fileValues.OF_OPENAI_API_KEY) {
   azdSet("OF_OPENAI_API_KEY", fileValues.OF_OPENAI_API_KEY);
 } else if (!keyless) {
-  console.log("note: no OF_OPENAI_API_KEY provided; set one via --api-key-env, or use --model-auth managed-identity for keyless auth.");
+  console.log("note: OF_OPENAI_API_KEY not set here. Set it directly with `azd env set OF_OPENAI_API_KEY=<key>` (kept in git-ignored .azure/), or use --model-auth managed-identity for keyless auth.");
 }
 
 console.log("");
