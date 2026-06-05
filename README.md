@@ -105,6 +105,13 @@ Do not use `--model-auth managed-identity` with `ghcp-foundry-runtime`; Copilot
 BYOK is API-key only. There is no separate `HARNESS` setting in `azd` or
 `agent.yaml` — the runtime image bakes the harness choice.
 
+## Sample agent repos
+
+Ready-made repos to try a deploy end-to-end:
+
+- [of-pi-agent](https://github.com/1openwindow/of-pi-agent) — minimal Pi agent (`pi-foundry-runtime`).
+- [of-ghcp-agent](https://github.com/1openwindow/of-ghcp-agent) — minimal GitHub Copilot agent (`ghcp-foundry-runtime`).
+
 ## Runtime contract
 
 The runtime image owns these environment variables. Source of truth is
