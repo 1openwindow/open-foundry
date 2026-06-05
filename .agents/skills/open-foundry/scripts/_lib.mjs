@@ -123,6 +123,18 @@ export function parseArgs(argv, { flags = [] } = {}) {
 // Harness inference. The runtime image is the single source of truth for the
 // harness (pi vs copilot); these helpers only *read* that choice for local
 // preflight and UX hints. They never decide the harness from repo structure.
+// Harness table is the single source of truth (references/contract.json
+// `harnesses`). Adding a harness (codex/claude/opencode/...) is a one-row data
+// change there — no code edits here.
+export function loadHarnesses() {
+  try {
+    const contract = JSON.parse(readFileSync(skillPath("references/contract.json"), "utf8"));
+    return Array.isArray(contract.harnesses) ? contract.harnesses : [];
+  } catch {
+    return [];
+  }
+}
+
 export function inferHarnessFromRuntimeImage(image) {
   if (!image || typeof image !== "string") return "unknown";
   // Drop digest and tag, then take the final path segment (the repository name).
@@ -131,8 +143,9 @@ export function inferHarnessFromRuntimeImage(image) {
   const lastSlash = ref.lastIndexOf("/");
   const noTag = lastColon > lastSlash ? ref.slice(0, lastColon) : ref;
   const name = noTag.slice(noTag.lastIndexOf("/") + 1);
-  if (name.includes("ghcp-foundry-runtime")) return "copilot";
-  if (name.includes("pi-foundry-runtime")) return "pi";
+  for (const h of loadHarnesses()) {
+    if (h.imagePrefix && h.harness && name.includes(h.imagePrefix)) return h.harness;
+  }
   return "unknown";
 }
 

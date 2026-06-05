@@ -22,7 +22,7 @@ import { access, copyFile, mkdir, readFile, rename, writeFile } from "node:fs/pr
 import { constants } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { installCrashHandlers, loadContract, parseArgs, inferHarnessFromRuntimeImage } from "./_lib.mjs";
+import { installCrashHandlers, loadContract, parseArgs, inferHarnessFromRuntimeImage, loadHarnesses } from "./_lib.mjs";
 
 installCrashHandlers();
 
@@ -90,7 +90,10 @@ console.log(`open-foundry bootstrap complete for ${agentName}.`);
 
 const harness = inferHarnessFromRuntimeImage(runtimeImage);
 if (harness === "unknown") {
-  console.log(`note: could not infer the harness from "${runtimeImage}"; ensure the image bakes ENV HARNESS=pi or copilot (pi-foundry-runtime = pi, ghcp-foundry-runtime = copilot).`);
+  const known = loadHarnesses()
+    .map((h) => `${h.imagePrefix} = ${h.harness}`)
+    .join(", ");
+  console.log(`note: could not infer the harness from "${runtimeImage}"; name the image <harness>-foundry-runtime and bake ENV HARNESS accordingly${known ? ` (${known})` : ""}.`);
 } else {
   console.log(`harness: ${harness} (from runtime image)`);
 }
