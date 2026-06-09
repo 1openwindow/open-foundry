@@ -26,7 +26,7 @@
 //   --mock <0|1>                             Default 0.
 //   --timeout-ms <ms>                        Default 600000.
 
-import { installCrashHandlers, loadContract, parseArgs, parseDotenv, run, tryRun, isSecretName, inferHarnessFromDockerfile, resolveModelAuth } from "./_lib.mjs";
+import { installCrashHandlers, loadContract, parseArgs, parseDotenv, run, tryRun, isSecretName, inferHarnessFromDockerfile, resolveModelAuth, harnessSupportsManagedIdentity } from "./_lib.mjs";
 import { readFileSync } from "node:fs";
 
 installCrashHandlers();
@@ -86,8 +86,9 @@ azdSet("OF_MOCK", prefer(args.mock, fileValues.OF_MOCK, "0"));
 azdSet("REQUEST_TIMEOUT_MS", prefer(args["timeout-ms"], fileValues.REQUEST_TIMEOUT_MS, "600000"));
 azdSet("ENABLE_DIAGNOSTICS", prefer(fileValues.ENABLE_DIAGNOSTICS, "0"));
 
-// The harness (pi vs copilot) is fixed by the runtime image, so it is not an azd env knob.
-// Copilot's apikey-only BYOK constraint is enforced by the runtime contract at startup.
+// The harness (pi/copilot/codex/...) is fixed by the runtime image, so it is not an
+// azd env knob. API-key-only harnesses' BYOK constraint is enforced by the runtime
+// contract at startup; this script also preflights it locally below.
 
 // Model
 const model = prefer(args.model, fileValues.OF_OPENAI_MODEL);
@@ -98,9 +99,9 @@ if (model) {
 azdSet("OF_OPENAI_BASE_URL", prefer(args["base-url"], fileValues.OF_OPENAI_BASE_URL));
 
 // Model auth mode: apikey (default, BYOK) or managed-identity (keyless). Validated against
-// the contract so accepted values stay in sync with the runtime. When the runtime image is
-// Copilot, force the explicit apikey default so any stale azd OF_MODEL_AUTH=managed-identity
-// from a prior pi deployment is overwritten before deploy.
+// the contract so accepted values stay in sync with the runtime. For API-key-only runtime
+// images (copilot/codex), resolveModelAuth forces the explicit apikey default so any stale
+// azd OF_MODEL_AUTH=managed-identity from a prior pi deployment is overwritten before deploy.
 const modelAuth = resolveModelAuth({ argValue: args["model-auth"], fileValue: fileValues.OF_MODEL_AUTH, harness: dockerfileHarness.harness });
 if (modelAuth) {
   const spec = contract.env.runtime.find((knob) => knob.name === "OF_MODEL_AUTH");
@@ -112,15 +113,16 @@ if (modelAuth) {
 
 const keyless = modelAuth === "managed-identity";
 
-// Local preflight: the runtime image is the harness selector, so read the
-// bootstrapped Dockerfile to catch the copilot + managed-identity trap here
-// instead of at first invocation. Copilot BYOK is API-key only.
+// Local preflight: the runtime image is the harness selector, so read the bootstrapped
+// Dockerfile to catch the API-key-only-harness + managed-identity trap here instead of at
+// first invocation. Apikey-only harnesses (copilot, codex) have no keyless BYOK path.
 if (keyless) {
-  if (dockerfileHarness.harness === "copilot") {
-    throw new Error("--model-auth managed-identity is not supported on the Copilot harness (ghcp-foundry-runtime); Copilot BYOK is API-key only. Use --api-key-env, or switch to a pi-foundry-runtime image.");
+  const harness = dockerfileHarness.harness;
+  if (dockerfileHarness.found && harness !== "unknown" && !harnessSupportsManagedIdentity(harness)) {
+    throw new Error(`--model-auth managed-identity is not supported on the ${harness} harness (${dockerfileHarness.image ?? "API-key-only runtime image"}); its BYOK is API-key only. Use --api-key-env, or switch to a pi-foundry-runtime image.`);
   }
-  if (!dockerfileHarness.found || dockerfileHarness.harness === "unknown") {
-    console.log("note: could not confirm the harness from ./Dockerfile; if this is a Copilot (ghcp-foundry-runtime) image, managed-identity will be rejected at startup (Copilot BYOK is API-key only).");
+  if (!dockerfileHarness.found || harness === "unknown") {
+    console.log("note: could not confirm the harness from ./Dockerfile; if this is an API-key-only image (e.g. ghcp-foundry-runtime or codex-foundry-runtime), managed-identity will be rejected at startup (their BYOK is API-key only).");
   }
 }
 if (modelAuth) azdSet("OF_MODEL_AUTH", modelAuth);

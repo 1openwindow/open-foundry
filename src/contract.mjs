@@ -21,6 +21,33 @@ export const contract = {
     { cpu: "1", memory: "2Gi" },
     { cpu: "2", memory: "4Gi" },
   ],
+  // Harness table — single source of truth for the harness ↔ runtime-image map
+  // and each harness's capabilities. Consumed by validateRuntimeEnv below and by
+  // .agents/skills/open-foundry/scripts/_lib.mjs (inferHarnessFromRuntimeImage,
+  // resolveModelAuth). `modelAuth` lists the auth modes the harness supports;
+  // a harness without "managed-identity" is API-key-only (BYOK). Adding a harness
+  // = add one row here (+ its adapter, an index.mjs case, and a
+  // Dockerfile.runtime stage), then run `node scripts/emit-contract.mjs`.
+  harnesses: [
+    {
+      harness: "pi",
+      imagePrefix: "pi-foundry-runtime",
+      runtimeImage: "ghcr.io/1openwindow/pi-foundry-runtime:0.1",
+      modelAuth: ["apikey", "managed-identity"],
+    },
+    {
+      harness: "copilot",
+      imagePrefix: "ghcp-foundry-runtime",
+      runtimeImage: "ghcr.io/1openwindow/ghcp-foundry-runtime:0.1",
+      modelAuth: ["apikey"],
+    },
+    {
+      harness: "codex",
+      imagePrefix: "codex-foundry-runtime",
+      runtimeImage: "ghcr.io/1openwindow/codex-foundry-runtime:0.1",
+      modelAuth: ["apikey"],
+    },
+  ],
   env: {
     reservedPrefixes: ["AGENT_", "FOUNDRY_"],
     reservedAllowedExceptions: ["FOUNDRY_PROJECT_ENDPOINT"],
@@ -39,14 +66,17 @@ export const contract = {
     requiredWhenLiveKeyless: ["OF_OPENAI_BASE_URL", "OF_OPENAI_MODEL"],
     // Optional runtime knobs with their defaults / accepted shapes.
     runtime: [
-      { name: "HARNESS", default: "pi", accepts: ["pi", "copilot"], note: "Agent harness. copilot drives GitHub Copilot via @github/copilot-sdk and reaches the model through BYOK (apikey only)." },
+      { name: "HARNESS", default: "pi", accepts: ["pi", "copilot", "codex"], note: "Agent harness. copilot drives GitHub Copilot via @github/copilot-sdk; codex drives OpenAI Codex via @openai/codex-sdk. Both reach the model through BYOK (apikey only)." },
       { name: "PI_ARGS", default: "--mode rpc --no-session", note: "Append --provider foundry --model <model> when using OF_OPENAI_*." },
       { name: "OF_MOCK", default: "0", accepts: ["0", "1", "true", "false"] },
-      { name: "OF_MODEL_AUTH", default: "apikey", accepts: ["apikey", "managed-identity"], note: "managed-identity mints AAD bearer tokens via DefaultAzureCredential; no OF_OPENAI_API_KEY needed. Not supported with HARNESS=copilot." },
+      { name: "OF_MODEL_AUTH", default: "apikey", accepts: ["apikey", "managed-identity"], note: "managed-identity mints AAD bearer tokens via DefaultAzureCredential; no OF_OPENAI_API_KEY needed. Not supported on API-key-only harnesses (copilot, codex)." },
       { name: "FOUNDRY_TOKEN_SCOPE", default: "https://cognitiveservices.azure.com/.default", note: "AAD scope used when OF_MODEL_AUTH=managed-identity." },
       { name: "COPILOT_PROVIDER_TYPE", default: "(auto)", accepts: ["azure", "openai"], note: "HARNESS=copilot BYOK provider type. Auto-detected from OF_OPENAI_BASE_URL (azure when the host is *.azure.com)." },
       { name: "COPILOT_WIRE_API", default: "completions", accepts: ["responses", "completions"], note: "HARNESS=copilot BYOK wire API format." },
       { name: "COPILOT_API_VERSION", default: "2025-04-01-preview", note: "HARNESS=copilot Azure provider api-version." },
+      { name: "CODEX_PROVIDER_TYPE", default: "(auto)", accepts: ["azure", "openai"], note: "HARNESS=codex BYOK provider type. Auto-detected from OF_OPENAI_BASE_URL (azure when the host is *.azure.com)." },
+      { name: "CODEX_WIRE_API", default: "responses", accepts: ["responses", "chat"], note: "HARNESS=codex provider wire API format." },
+      { name: "CODEX_API_VERSION", default: "2025-04-01-preview", note: "HARNESS=codex Azure provider api-version." },
       { name: "REQUEST_TIMEOUT_MS", default: "300000" },
       { name: "SSE_HEARTBEAT_MS", default: "20000", note: "SSE keepalive interval; emits a `:` comment so Foundry's ~120s APIM idle timeout never fires during silent phases. 0 disables." },
       { name: "ENABLE_DIAGNOSTICS", default: "0", accepts: ["0", "1", "true", "false"] },
@@ -58,31 +88,48 @@ export const contract = {
   },
 };
 
+// Auth modes a harness supports, read from the harnesses table (single source of
+// truth). Unknown harnesses fall back to API-key-only. A harness whose modelAuth
+// omits "managed-identity" has no keyless path (BYOK is API-key only).
+export function harnessModelAuthModes(harness) {
+  const row = contract.harnesses.find((h) => h.harness === harness);
+  return Array.isArray(row?.modelAuth) ? row.modelAuth : ["apikey"];
+}
+
+export function harnessSupportsManagedIdentity(harness) {
+  return harnessModelAuthModes(harness).includes("managed-identity");
+}
+
 export function validateRuntimeEnv(env, { mock } = {}) {
   const issues = [];
+  const knownHarnesses = contract.harnesses.map((h) => h.harness);
   const harness = String(env.HARNESS ?? "").trim().toLowerCase() || "pi";
-  if (harness !== "pi" && harness !== "copilot") {
-    issues.push({ severity: "error", name: "HARNESS", message: `HARNESS must be one of pi, copilot (got "${harness}").` });
+  if (!knownHarnesses.includes(harness)) {
+    issues.push({ severity: "error", name: "HARNESS", message: `HARNESS must be one of ${knownHarnesses.join(", ")} (got "${harness}").` });
   }
-  // Copilot reaches the model through BYOK, which is API-key only; there is no
-  // keyless path, so reject managed-identity instead of failing at first call.
-  if (harness === "copilot" && String(env.OF_MODEL_AUTH ?? "").trim().toLowerCase() === "managed-identity") {
-    issues.push({ severity: "error", name: "OF_MODEL_AUTH", message: "HARNESS=copilot does not support OF_MODEL_AUTH=managed-identity; Copilot BYOK requires an API key (set OF_OPENAI_API_KEY)." });
+  // API-key-only harnesses (modelAuth without "managed-identity", e.g. copilot/codex)
+  // reach the model through BYOK and have no keyless path, so reject managed-identity
+  // here instead of failing at the first model call.
+  const requestedKeyless = String(env.OF_MODEL_AUTH ?? "").trim().toLowerCase() === "managed-identity";
+  if (requestedKeyless && knownHarnesses.includes(harness) && !harnessSupportsManagedIdentity(harness)) {
+    issues.push({ severity: "error", name: "OF_MODEL_AUTH", message: `HARNESS=${harness} does not support OF_MODEL_AUTH=managed-identity; BYOK requires an API key (set OF_OPENAI_API_KEY).` });
   }
-  // Validate Copilot knobs at startup so a typo fails fast here, not as an opaque
-  // SDK error on the first invocation. Only enforced for the copilot harness.
-  if (harness === "copilot") {
-    for (const name of ["COPILOT_PROVIDER_TYPE", "COPILOT_WIRE_API"]) {
-      const value = String(env[name] ?? "").trim().toLowerCase();
-      if (!value) continue;
-      const accepts = contract.env.runtime.find((knob) => knob.name === name)?.accepts ?? [];
-      if (!accepts.includes(value)) {
-        issues.push({ severity: "error", name, message: `${name} must be one of ${accepts.join(", ")} (got "${value}").` });
-      }
+  // Validate harness knobs at startup so a typo fails fast here, not as an opaque
+  // SDK error on the first invocation. Only enforced for the relevant harness.
+  const knobsByHarness = {
+    copilot: ["COPILOT_PROVIDER_TYPE", "COPILOT_WIRE_API"],
+    codex: ["CODEX_PROVIDER_TYPE", "CODEX_WIRE_API"],
+  };
+  for (const name of knobsByHarness[harness] ?? []) {
+    const value = String(env[name] ?? "").trim().toLowerCase();
+    if (!value) continue;
+    const accepts = contract.env.runtime.find((knob) => knob.name === name)?.accepts ?? [];
+    if (!accepts.includes(value)) {
+      issues.push({ severity: "error", name, message: `${name} must be one of ${accepts.join(", ")} (got "${value}").` });
     }
   }
   if (!mock) {
-    const keyless = harness !== "copilot" && String(env.OF_MODEL_AUTH ?? "").trim().toLowerCase() === "managed-identity";
+    const keyless = requestedKeyless && harnessSupportsManagedIdentity(harness);
     const required = keyless ? contract.env.requiredWhenLiveKeyless : contract.env.requiredWhenLive;
     for (const name of required) {
       if (!env[name] || String(env[name]).trim() === "") {

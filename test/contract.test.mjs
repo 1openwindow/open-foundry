@@ -139,4 +139,30 @@ describe("validateRuntimeEnv", () => {
     );
     assert.ok(issues.some((i) => i.severity === "error" && i.name === "COPILOT_PROVIDER_TYPE"));
   });
+
+  it("accepts HARNESS=codex with the apikey triple", () => {
+    const issues = validateRuntimeEnv(
+      { HARNESS: "codex", OF_OPENAI_API_KEY: "sk-x", OF_OPENAI_BASE_URL: "https://x", OF_OPENAI_MODEL: "gpt-5.1" },
+      { mock: false },
+    );
+    assert.deepEqual(issues.filter((i) => i.severity === "error"), []);
+  });
+
+  it("rejects HARNESS=codex with OF_MODEL_AUTH=managed-identity (BYOK is apikey only)", () => {
+    const issues = validateRuntimeEnv(
+      { HARNESS: "codex", OF_MODEL_AUTH: "managed-identity", OF_OPENAI_BASE_URL: "https://x", OF_OPENAI_MODEL: "gpt-5.1" },
+      { mock: false },
+    );
+    const authErrors = issues.filter((i) => i.severity === "error" && i.name === "OF_MODEL_AUTH");
+    assert.equal(authErrors.length, 1);
+    assert.ok(issues.some((i) => i.severity === "error" && i.name === "OF_OPENAI_API_KEY"));
+  });
+
+  it("rejects an invalid CODEX_WIRE_API only under the codex harness", () => {
+    const base = { OF_OPENAI_API_KEY: "sk-x", OF_OPENAI_BASE_URL: "https://x", OF_OPENAI_MODEL: "gpt-5.1" };
+    const codex = validateRuntimeEnv({ HARNESS: "codex", CODEX_WIRE_API: "bogus", ...base }, { mock: false });
+    assert.ok(codex.some((i) => i.severity === "error" && i.name === "CODEX_WIRE_API"));
+    const pi = validateRuntimeEnv({ CODEX_WIRE_API: "bogus", ...base }, { mock: false });
+    assert.equal(pi.filter((i) => i.name === "CODEX_WIRE_API").length, 0);
+  });
 });

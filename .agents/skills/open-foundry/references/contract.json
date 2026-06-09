@@ -7,18 +7,6 @@
     },
     "startupCommand": "node /app/src/backend.mjs"
   },
-  "harnesses": [
-    {
-      "harness": "pi",
-      "imagePrefix": "pi-foundry-runtime",
-      "runtimeImage": "ghcr.io/1openwindow/pi-foundry-runtime:0.1"
-    },
-    {
-      "harness": "copilot",
-      "imagePrefix": "ghcp-foundry-runtime",
-      "runtimeImage": "ghcr.io/1openwindow/ghcp-foundry-runtime:0.1"
-    }
-  ],
   "resourceTiers": [
     {
       "cpu": "0.25",
@@ -35,6 +23,33 @@
     {
       "cpu": "2",
       "memory": "4Gi"
+    }
+  ],
+  "harnesses": [
+    {
+      "harness": "pi",
+      "imagePrefix": "pi-foundry-runtime",
+      "runtimeImage": "ghcr.io/1openwindow/pi-foundry-runtime:0.1",
+      "modelAuth": [
+        "apikey",
+        "managed-identity"
+      ]
+    },
+    {
+      "harness": "copilot",
+      "imagePrefix": "ghcp-foundry-runtime",
+      "runtimeImage": "ghcr.io/1openwindow/ghcp-foundry-runtime:0.1",
+      "modelAuth": [
+        "apikey"
+      ]
+    },
+    {
+      "harness": "codex",
+      "imagePrefix": "codex-foundry-runtime",
+      "runtimeImage": "ghcr.io/1openwindow/codex-foundry-runtime:0.1",
+      "modelAuth": [
+        "apikey"
+      ]
     }
   ],
   "env": {
@@ -67,9 +82,10 @@
         "default": "pi",
         "accepts": [
           "pi",
-          "copilot"
+          "copilot",
+          "codex"
         ],
-        "note": "Agent harness. copilot drives GitHub Copilot via @github/copilot-sdk and reaches the model through BYOK (apikey only)."
+        "note": "Agent harness. copilot drives GitHub Copilot via @github/copilot-sdk; codex drives OpenAI Codex via @openai/codex-sdk. Both reach the model through BYOK (apikey only)."
       },
       {
         "name": "PI_ARGS",
@@ -93,7 +109,7 @@
           "apikey",
           "managed-identity"
         ],
-        "note": "managed-identity mints AAD bearer tokens via DefaultAzureCredential; no OF_OPENAI_API_KEY needed. Not supported with HARNESS=copilot."
+        "note": "managed-identity mints AAD bearer tokens via DefaultAzureCredential; no OF_OPENAI_API_KEY needed. Not supported on API-key-only harnesses (copilot, codex)."
       },
       {
         "name": "FOUNDRY_TOKEN_SCOPE",
@@ -122,6 +138,29 @@
         "name": "COPILOT_API_VERSION",
         "default": "2025-04-01-preview",
         "note": "HARNESS=copilot Azure provider api-version."
+      },
+      {
+        "name": "CODEX_PROVIDER_TYPE",
+        "default": "(auto)",
+        "accepts": [
+          "azure",
+          "openai"
+        ],
+        "note": "HARNESS=codex BYOK provider type. Auto-detected from OF_OPENAI_BASE_URL (azure when the host is *.azure.com)."
+      },
+      {
+        "name": "CODEX_WIRE_API",
+        "default": "responses",
+        "accepts": [
+          "responses",
+          "chat"
+        ],
+        "note": "HARNESS=codex provider wire API format."
+      },
+      {
+        "name": "CODEX_API_VERSION",
+        "default": "2025-04-01-preview",
+        "note": "HARNESS=codex Azure provider api-version."
       },
       {
         "name": "REQUEST_TIMEOUT_MS",

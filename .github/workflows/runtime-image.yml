@@ -6,6 +6,7 @@ name: runtime-image
 # harness (same version tags, different name):
 #   target pi       ->  ghcr.io/<owner>/pi-foundry-runtime:<tag>
 #   target copilot  ->  ghcr.io/<owner>/ghcp-foundry-runtime:<tag>
+#   target codex    ->  ghcr.io/<owner>/codex-foundry-runtime:<tag>
 #
 # Two phases make publishing all-or-nothing:
 #   build   — builds every harness with push:false (fail-fast off, so every
@@ -14,17 +15,17 @@ name: runtime-image
 #             harness failure publishes nothing — no half-released version skew.
 #
 # Triggers:
-#   - push a tag like  v0.2.0   → publishes  :0.2.0  :0.2  :latest  on both images,
+#   - push a tag like  v0.2.0   → publishes  :0.2.0  :0.2  :latest  on all images,
 #                          then creates the matching GitHub Release (so
 #                          `gh skill install` resolves to the new tag).
 #   - workflow_dispatch  → publishes :sha-<short> and :manual-<run-number>
-#                          on both images, never :latest; no Release.
+#                          on all images, never :latest; no Release.
 #
 # Repo settings required (one-time):
 #   Settings → Actions → General → Workflow permissions = Read and write
 #   (or rely on the explicit `permissions:` block below — which we use).
-#   Confirm each GHCR package (pi-foundry-runtime, ghcp-foundry-runtime) is
-#   public the first time it is published.
+#   Confirm each GHCR package (pi-foundry-runtime, ghcp-foundry-runtime,
+#   codex-foundry-runtime) is public the first time it is published.
 
 on:
   push:
@@ -45,7 +46,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [pi, copilot]
+        target: [pi, copilot, codex]
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -72,6 +73,8 @@ jobs:
             image: pi-foundry-runtime
           - target: copilot
             image: ghcp-foundry-runtime
+          - target: codex
+            image: codex-foundry-runtime
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
     steps:

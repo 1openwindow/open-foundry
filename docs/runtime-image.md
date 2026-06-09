@@ -13,6 +13,7 @@ to put in `azd` env, `agent.yaml`, or `agent.manifest.yaml`.
 |---|---|---|---|
 | `pi-foundry-runtime:<tag>` | `pi` | pi-coding-agent + pi adapter | API key or managed identity |
 | `ghcp-foundry-runtime:<tag>` | `copilot` | GitHub Copilot SDK + Copilot adapter | API key only |
+| `codex-foundry-runtime:<tag>` | `codex` | OpenAI Codex SDK + Codex adapter | API key only |
 
 The skill's `bootstrap.mjs` writes a thin Dockerfile in your repo that pulls the
 image you choose:
@@ -62,11 +63,20 @@ OPEN_FOUNDRY_RUNTIME_IMAGE=ghcp-foundry-runtime:local \
 npm run runtime:build
 ```
 
+Build the OpenAI Codex image:
+
+```bash
+OPEN_FOUNDRY_RUNTIME_TARGET=codex \
+OPEN_FOUNDRY_RUNTIME_IMAGE=codex-foundry-runtime:local \
+npm run runtime:build
+```
+
 ## Smoke locally (requires Docker)
 
 ```bash
 OPEN_FOUNDRY_RUNTIME_IMAGE=pi-foundry-runtime:local npm run runtime:smoke
 OPEN_FOUNDRY_RUNTIME_IMAGE=ghcp-foundry-runtime:local npm run runtime:smoke
+OPEN_FOUNDRY_RUNTIME_IMAGE=codex-foundry-runtime:local npm run runtime:smoke
 ```
 
 Runs the container with `OF_MOCK=1`, mounts a throwaway tempdir as `/workspace`
@@ -99,6 +109,17 @@ az acr build \
   .
 ```
 
+Build the OpenAI Codex image:
+
+```bash
+az acr build \
+  --registry <acr> \
+  --image codex-foundry-runtime:<tag> \
+  --target codex \
+  --file Dockerfile.runtime \
+  .
+```
+
 ## Publish
 
 Tag and push each image to the registry your Foundry project can pull from:
@@ -106,6 +127,7 @@ Tag and push each image to the registry your Foundry project can pull from:
 ```bash
 docker push <acr>.azurecr.io/pi-foundry-runtime:<tag>
 docker push <acr>.azurecr.io/ghcp-foundry-runtime:<tag>
+docker push <acr>.azurecr.io/codex-foundry-runtime:<tag>
 ```
 
 Or, for a non-ACR registry:
@@ -116,6 +138,9 @@ docker push ghcr.io/<org>/pi-foundry-runtime:<tag>
 
 OPEN_FOUNDRY_RUNTIME_TARGET=copilot OPEN_FOUNDRY_RUNTIME_IMAGE=ghcr.io/<org>/ghcp-foundry-runtime:<tag> npm run runtime:build
 docker push ghcr.io/<org>/ghcp-foundry-runtime:<tag>
+
+OPEN_FOUNDRY_RUNTIME_TARGET=codex OPEN_FOUNDRY_RUNTIME_IMAGE=ghcr.io/<org>/codex-foundry-runtime:<tag> npm run runtime:build
+docker push ghcr.io/<org>/codex-foundry-runtime:<tag>
 ```
 
 For `azd deploy` ACR remote builds, the registry holding the image must be one
@@ -124,11 +149,12 @@ time by editing `Dockerfile`.
 
 ## Publish via GitHub Actions (GHCR)
 
-`.github/workflows/runtime-image.yml` publishes both image names on a version
+`.github/workflows/runtime-image.yml` publishes every image name on a version
 tag:
 
 - `ghcr.io/<owner>/pi-foundry-runtime`
 - `ghcr.io/<owner>/ghcp-foundry-runtime`
+- `ghcr.io/<owner>/codex-foundry-runtime`
 
 ```bash
 git tag v0.1.0
@@ -138,7 +164,7 @@ git push origin v0.1.0
 - A version tag `v<X.Y.Z>` publishes `:<X.Y.Z>`, `:<X.Y>`, and `:latest`.
 - `workflow_dispatch` publishes `:sha-<short>` and `:manual-<run-number>` (never `:latest`).
 - Publishing is all-or-nothing: if any harness fails to build, nothing is
-  published — so the two images never drift apart in version.
+  published — so the images never drift apart in version.
 
 The first time each package is published, confirm it is public so Foundry can
 pull without auth (GitHub → Packages → the package → change visibility), then
@@ -147,6 +173,7 @@ verify anonymously:
 ```bash
 docker logout ghcr.io && docker pull ghcr.io/<owner>/pi-foundry-runtime:<tag>
 docker logout ghcr.io && docker pull ghcr.io/<owner>/ghcp-foundry-runtime:<tag>
+docker logout ghcr.io && docker pull ghcr.io/<owner>/codex-foundry-runtime:<tag>
 ```
 
 > The workflow must already be on the default branch before you push the tag, or
@@ -155,6 +182,7 @@ docker logout ghcr.io && docker pull ghcr.io/<owner>/ghcp-foundry-runtime:<tag>
 
 ## Versioning
 
-`pi-foundry-runtime:<tag>` and `ghcp-foundry-runtime:<tag>` are the contract
+`pi-foundry-runtime:<tag>`, `ghcp-foundry-runtime:<tag>`, and
+`codex-foundry-runtime:<tag>` are the contract
 surface: bump the tag on breaking changes to the env contract or SSE shape.
 Choose the image with `bootstrap.mjs --runtime-image <ref>`.

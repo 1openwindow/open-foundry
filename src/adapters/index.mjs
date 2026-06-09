@@ -1,4 +1,5 @@
 import { createCopilotSdkAdapter } from "./copilot-sdk.mjs";
+import { createCodexSdkAdapter } from "./codex-sdk.mjs";
 import { createPiRpcAdapter } from "./pi-rpc.mjs";
 
 // Normalized harness adapter interface:
@@ -7,8 +8,9 @@ import { createPiRpcAdapter } from "./pi-rpc.mjs";
 //   invoke(prompt, options)  required, runs one turn
 //   dispose()               optional, called on shutdown
 //
-// Default harness is pi; HARNESS=copilot selects the Copilot SDK adapter.
-export const SUPPORTED_HARNESSES = ["pi", "copilot"];
+// Default harness is pi; HARNESS=copilot selects the Copilot SDK adapter,
+// HARNESS=codex selects the OpenAI Codex SDK adapter.
+export const SUPPORTED_HARNESSES = ["pi", "copilot", "codex"];
 
 export function createAdapter(harness, ctx) {
   switch (harness) {
@@ -23,6 +25,8 @@ export function createAdapter(harness, ctx) {
     }
     case "copilot":
       return createCopilotSdkAdapter(ctx);
+    case "codex":
+      return createCodexSdkAdapter(ctx);
     default:
       throw new Error(`unknown HARNESS=${harness}; supported: ${SUPPORTED_HARNESSES.join(", ")}`);
   }

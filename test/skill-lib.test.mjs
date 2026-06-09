@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseDotenv, isSecretName, redact, parseArgs, inferHarnessFromRuntimeImage, runtimeImageFromDockerfileText, resolveModelAuth } from "../.agents/skills/open-foundry/scripts/_lib.mjs";
+import { parseDotenv, isSecretName, redact, parseArgs, inferHarnessFromRuntimeImage, runtimeImageFromDockerfileText, resolveModelAuth, harnessSupportsManagedIdentity } from "../.agents/skills/open-foundry/scripts/_lib.mjs";
 
 describe("parseDotenv", () => {
   it("parses bare KEY=value lines", () => {
@@ -143,6 +143,10 @@ describe("resolveModelAuth", () => {
     assert.equal(resolveModelAuth({ harness: "copilot" }), "apikey");
   });
 
+  it("defaults Codex deployments to apikey (apikey-only harness)", () => {
+    assert.equal(resolveModelAuth({ harness: "codex" }), "apikey");
+  });
+
   it("preserves explicit or file-provided auth values", () => {
     assert.equal(resolveModelAuth({ argValue: "managed-identity", harness: "copilot" }), "managed-identity");
     assert.equal(resolveModelAuth({ fileValue: "managed-identity", harness: "pi" }), "managed-identity");
@@ -150,5 +154,21 @@ describe("resolveModelAuth", () => {
 
   it("does not invent an auth env value for pi deployments", () => {
     assert.equal(resolveModelAuth({ harness: "pi" }), undefined);
+  });
+
+  it("does not invent an auth env value for an unconfirmable harness", () => {
+    assert.equal(resolveModelAuth({ harness: "unknown" }), undefined);
+  });
+});
+
+describe("harnessSupportsManagedIdentity", () => {
+  it("is true for pi and false for apikey-only harnesses", () => {
+    assert.equal(harnessSupportsManagedIdentity("pi"), true);
+    assert.equal(harnessSupportsManagedIdentity("copilot"), false);
+    assert.equal(harnessSupportsManagedIdentity("codex"), false);
+  });
+
+  it("treats an unconfirmable harness as managed-identity-capable (no invented apikey default)", () => {
+    assert.equal(harnessSupportsManagedIdentity("unknown"), true);
   });
 });

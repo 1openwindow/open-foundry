@@ -4,6 +4,7 @@
 # stage's baked ENV HARNESS makes the image itself the harness selector.
 #   --target pi       -> pi-coding-agent     (image: pi-foundry-runtime,   ~655MB)
 #   --target copilot  -> @github/copilot-sdk  (image: ghcp-foundry-runtime, ~1.75GB)
+#   --target codex    -> @openai/codex-sdk    (image: codex-foundry-runtime)
 # Adding a harness = add one `FROM base AS <name>` stage below (+ its adapter in
 # src/adapters and a case in src/adapters/index.mjs).
 
@@ -59,3 +60,10 @@ USER node
 FROM base AS copilot
 ENV HARNESS=copilot
 RUN npm install --no-save @github/copilot-sdk@1.0.0-beta.12
+
+# --- codex harness ----------------------------------------------------------
+# OpenAI Codex SDK / CLI runtime, loaded lazily by src/adapters/codex-sdk.mjs.
+# @openai/codex-sdk pins and pulls the matching @openai/codex CLI binary.
+FROM base AS codex
+ENV HARNESS=codex
+RUN npm install --no-save @openai/codex-sdk@0.138.0

@@ -20,7 +20,7 @@ Confirm these before bootstrapping; if missing, tell the user exactly what to in
 - **azd ≥ 1.25.4** with the Foundry extension: `azd version`, then `azd extension list` (expect `azure.ai.agents`); install with `azd extension install azure.ai.agents`. Sign in with `azd auth login`. `az` (Azure CLI) is **not** required — the scripts use `azd auth token` + ARM REST.
 - **Node ≥ 20** to run the skill scripts.
 - **A Foundry project**: subscription id, location, and project endpoint (`https://<account>.services.ai.azure.com/api/projects/<project>`).
-- **A runtime image** the Foundry project can pull, named `<harness>-foundry-runtime`. Use the ready-to-use one for your harness — the contract `harnesses` table holds each one's `runtimeImage` (currently `ghcr.io/1openwindow/pi-foundry-runtime:0.1` for pi, `ghcr.io/1openwindow/ghcp-foundry-runtime:0.1` for GitHub Copilot). Advanced: pin an exact version or build your own (see [docs/runtime-image.md](https://github.com/1openwindow/open-foundry/blob/main/docs/runtime-image.md)).
+- **A runtime image** the Foundry project can pull, named `<harness>-foundry-runtime`. Use the ready-to-use one for your harness — the contract `harnesses` table holds each one's `runtimeImage` (currently `ghcr.io/1openwindow/pi-foundry-runtime:0.1` for pi, `ghcr.io/1openwindow/ghcp-foundry-runtime:0.1` for GitHub Copilot, `ghcr.io/1openwindow/codex-foundry-runtime:0.1` for OpenAI Codex). Advanced: pin an exact version or build your own (see [docs/runtime-image.md](https://github.com/1openwindow/open-foundry/blob/main/docs/runtime-image.md)).
 - **A container registry** (`<acr>.azurecr.io`) for `azd deploy`'s remote build, with `AcrPull` granted to the Foundry agent identities.
 - **A model**: OpenAI-compatible endpoint + model name, plus either an API key or — for keyless `managed-identity` — the Azure rights to create a role assignment (`Owner` or `User Access Administrator` on the model account), since `grant-model-access.mjs` writes one.
 - **Foundry `HostedAgents` preview** enabled for the tenant/subscription; without it, session creation returns `403 preview_feature_required`.
@@ -85,9 +85,9 @@ Rules:
    - **Already bootstrapped repo**: has `agent.yaml` with `kind: hosted` and open-foundry-style env vars.
    - **open-foundry development checkout**: has `Dockerfile.runtime` and `.agents/skills/open-foundry/SKILL.md`. **Do not bootstrap here.**
 2. Determine the harness from the **runtime image** — never from repo structure:
-   - **Already bootstrapped**: read the runtime image out of the root `Dockerfile` (`ARG OPEN_FOUNDRY_RUNTIME_IMAGE=` / `FROM`). The image is named `<harness>-foundry-runtime`, so its prefix selects the harness — the prefix⇒harness mappings live in the contract `harnesses` table (e.g. `pi-foundry-runtime` ⇒ pi, `ghcp-foundry-runtime` ⇒ copilot). `bootstrap.mjs` and `configure-env.mjs` do this inference for you.
-   - **Not yet bootstrapped**: there is nothing to infer from. Ask the user which harness they want, then offer the matching `runtimeImage` from the contract `harnesses` table as a default they can accept as-is (currently `ghcr.io/1openwindow/pi-foundry-runtime:0.1` for pi, `ghcr.io/1openwindow/ghcp-foundry-runtime:0.1` for Copilot). Default to pi unless they ask for Copilot. Don't make them hunt for a registry or tag.
-   - Repo files like `.github/agents/*.md`, `.github/copilot-instructions.md`, or `.pi/settings.json` are at most a **hint** ("this looks like it may be aimed at Copilot/pi") — they never decide the harness. If an image name is custom/unrecognizable, ask the user "is this a pi or copilot image?".
+  - **Already bootstrapped**: read the runtime image out of the root `Dockerfile` (`ARG OPEN_FOUNDRY_RUNTIME_IMAGE=` / `FROM`). The image is named `<harness>-foundry-runtime`, so its prefix selects the harness — the prefix⇒harness mappings live in the contract `harnesses` table (e.g. `pi-foundry-runtime` ⇒ pi, `ghcp-foundry-runtime` ⇒ copilot, `codex-foundry-runtime` ⇒ codex). `bootstrap.mjs` and `configure-env.mjs` do this inference for you.
+  - **Not yet bootstrapped**: there is nothing to infer from. Ask the user which harness they want, then offer the matching `runtimeImage` from the contract `harnesses` table as a default they can accept as-is (currently `ghcr.io/1openwindow/pi-foundry-runtime:0.1` for pi, `ghcr.io/1openwindow/ghcp-foundry-runtime:0.1` for Copilot, `ghcr.io/1openwindow/codex-foundry-runtime:0.1` for Codex). Default to pi unless they ask for Copilot or Codex. Don't make them hunt for a registry or tag.
+  - Repo files like `.github/agents/*.md`, `.github/copilot-instructions.md`, `.pi/settings.json`, or `.codex/` are at most a **hint** ("this looks like it may be aimed at Copilot/pi/codex") — they never decide the harness. If an image name is custom/unrecognizable, ask the user "is this a pi, copilot, or codex image?".
 3. Use plain commands: `pwd`, `ls -la`, `cat azure.yaml 2>/dev/null`, `git status --short`. No special inspect script.
 4. State what you plan to do before running any mutating command.
 
@@ -96,7 +96,7 @@ Rules:
 Ask the user only for what you can't infer:
 
 - **Agent name** — default to a sanitized version of the repo directory name. Lowercase a-z/0-9/hyphen, 3-64 chars.
-- **Runtime image** — this is also the **harness selector**: the image is named `<harness>-foundry-runtime`, so its prefix picks the harness (prefix⇒harness mappings live in the contract `harnesses` table). Default to pi unless the user asks for Copilot. Offer the chosen harness's `runtimeImage` from the contract — it works out of the box and the user can accept it as-is (currently `ghcr.io/1openwindow/pi-foundry-runtime:0.1` for pi, `ghcr.io/1openwindow/ghcp-foundry-runtime:0.1` for Copilot); never ask them to supply a registry or tag. Advanced: pin an exact version or provide your own like `<acr>.azurecr.io/<harness>-foundry-runtime:<tag>`; see [docs/runtime-image.md](https://github.com/1openwindow/open-foundry/blob/main/docs/runtime-image.md) for how to build/publish one.
+- **Runtime image** — this is also the **harness selector**: the image is named `<harness>-foundry-runtime`, so its prefix picks the harness (prefix⇒harness mappings live in the contract `harnesses` table). Default to pi unless the user asks for Copilot or Codex. Offer the chosen harness's `runtimeImage` from the contract — it works out of the box and the user can accept it as-is (currently `ghcr.io/1openwindow/pi-foundry-runtime:0.1` for pi, `ghcr.io/1openwindow/ghcp-foundry-runtime:0.1` for Copilot, `ghcr.io/1openwindow/codex-foundry-runtime:0.1` for Codex); never ask them to supply a registry or tag. Advanced: pin an exact version or provide your own like `<acr>.azurecr.io/<harness>-foundry-runtime:<tag>`; see [docs/runtime-image.md](https://github.com/1openwindow/open-foundry/blob/main/docs/runtime-image.md) for how to build/publish one.
 - **Model** — `OF_OPENAI_MODEL`, e.g. `gpt-4.1-mini`. Default `PI_ARGS` is built from it.
 - **OpenAI-compatible endpoint** — `OF_OPENAI_BASE_URL`, usually `https://<account>.cognitiveservices.azure.com/openai/v1`.
 - **Foundry project + subscription** — `FOUNDRY_PROJECT_ENDPOINT` (e.g. `https://<account>.services.ai.azure.com/api/projects/<project>`), `AZURE_SUBSCRIPTION_ID`, `AZURE_LOCATION`. `configure-env.mjs` derives `AZURE_AI_PROJECT_ID` (the project's ARM resource id, required by `azd deploy`) and `AZURE_TENANT_ID` from these automatically; if derivation fails it prints how to pass them explicitly.
@@ -178,6 +178,11 @@ Copilot BYOK is API-key only, so `--model-auth managed-identity` is rejected —
 catches it locally (by reading the runtime image from `./Dockerfile`) and the runtime rejects it at
 startup as a backstop. The verified `COPILOT_*` defaults need no flags; override them in `agent.yaml`
 + `agent.manifest.yaml` if needed.
+
+The OpenAI Codex harness (`codex-foundry-runtime`, `@openai/codex-sdk`) is identical in shape: BYOK
+API-key only (managed-identity rejected the same way), with verified `CODEX_*` defaults instead of
+`COPILOT_*`. The apikey-only constraint is data-driven — `configure-env.mjs` and the runtime read each
+harness's `modelAuth` from the contract `harnesses` table, so no harness names are hardcoded.
 
 ### Verify
 

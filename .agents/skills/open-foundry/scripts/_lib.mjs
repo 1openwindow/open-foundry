@@ -121,7 +121,7 @@ export function parseArgs(argv, { flags = [] } = {}) {
 }
 
 // Harness inference. The runtime image is the single source of truth for the
-// harness (pi vs copilot); these helpers only *read* that choice for local
+// harness (pi/copilot/codex/...); these helpers only *read* that choice for local
 // preflight and UX hints. They never decide the harness from repo structure.
 // Harness table is the single source of truth (references/contract.json
 // `harnesses`). Adding a harness (codex/claude/opencode/...) is a one-row data
@@ -179,8 +179,22 @@ export function inferHarnessFromDockerfile(path = "Dockerfile") {
   return { harness: inferHarnessFromRuntimeImage(image), image, found: true };
 }
 
+// Auth modes a harness supports, from the contract `harnesses` table. A harness
+// whose modelAuth omits "managed-identity" is API-key-only (BYOK, no keyless path).
+// Unknown/unreadable harnesses are treated as supporting managed-identity so we
+// never invent an apikey default for a harness we cannot positively classify.
+export function harnessSupportsManagedIdentity(harness) {
+  const row = loadHarnesses().find((h) => h.harness === harness);
+  if (!row) return true;
+  return Array.isArray(row.modelAuth) ? row.modelAuth.includes("managed-identity") : true;
+}
+
 export function resolveModelAuth({ argValue, fileValue, harness }) {
-  return argValue || fileValue || (harness === "copilot" ? "apikey" : undefined);
+  if (argValue || fileValue) return argValue || fileValue;
+  // API-key-only harnesses (copilot, codex, ...) default to apikey so a stale
+  // azd OF_MODEL_AUTH=managed-identity from a prior agent is overwritten; harnesses
+  // that support managed-identity (pi) get no invented default.
+  return harnessSupportsManagedIdentity(harness) ? undefined : "apikey";
 }
 
 export function fail(message) {
