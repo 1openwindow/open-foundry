@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 
 // pi harness adapter (HARNESS=pi, the default).
 //
@@ -18,6 +18,31 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 // The in-process AgentSession emits the same events the RPC transport serialized
 // (message_update/text_delta, agent_end with messages), so streaming is real and
 // token-granular: each text_delta is forwarded to onTextDelta as it arrives.
+// Pure reducer for the AgentSession event stream. Folds streaming events into
+// { text, agentEndMessages }. Exported so the event handling can be unit-tested
+// without a live pi session (the SDK path is otherwise unreachable under mock).
+export function reducePiStreamEvent(state, event, { onTextDelta, log } = {}) {
+  if (event?.type === "message_update") {
+    const update = event.assistantMessageEvent;
+    if (update?.type === "text_delta" && typeof update.delta === "string") {
+      state.text += update.delta;
+      onTextDelta?.(update.delta);
+    } else if (update?.type === "error") {
+      // Transient stream hiccup; pi auto-retries. Final outcome is the assistant
+      // stopReason on agent_end, checked after the turn settles.
+      log?.("warning", "pi_stream_error", { message: update.errorMessage ?? update.reason ?? "unknown" });
+    }
+  } else if (event?.type === "agent_end") {
+    state.agentEndMessages = event.messages;
+    if (event.willRetry) {
+      // Failed attempt; pi retries from scratch and re-streams the next attempt's
+      // text. Drop the partial so the result reflects only the final attempt.
+      state.text = "";
+    }
+  }
+  return state;
+}
+
 export function createPiSdkAdapter({
   requestTimeoutMs,
   mock,
@@ -101,13 +126,17 @@ export function createPiSdkAdapter({
       throw err;
     }
     ({ createAgentSession, AuthStorage, ModelRegistry, SessionManager } = sdk);
-    await mkdir(piAgentDir, { recursive: true });
   }
 
   // Register the Foundry-backed model as a custom provider in models.json, then
-  // build the AuthStorage + ModelRegistry the per-turn sessions reuse. The API key
-  // is never written to models.json; it is supplied as a runtime override (apikey)
-  // or minted per turn (managed-identity) so nothing secret touches disk.
+  // build the AuthStorage + ModelRegistry the per-turn sessions reuse. The real API
+  // key is never written to models.json; it is supplied as a runtime override
+  // (apikey) or minted per turn (managed-identity) so nothing secret touches disk.
+  //
+  // pi's models.json schema requires a non-empty `apiKey` on any custom provider that
+  // defines models, or the whole file fails to load and `find()` returns undefined.
+  // We satisfy it with a non-secret placeholder; AuthStorage.setRuntimeApiKey takes
+  // priority over it at request time, so the placeholder is never actually used.
   async function configureModelProvider() {
     if (isMock) return;
     if (!foundryOpenAIBaseUrl || !foundryOpenAIModel) return;
@@ -124,6 +153,9 @@ export function createPiSdkAdapter({
     providers.foundry = {
       baseUrl: foundryOpenAIBaseUrl,
       api: "openai-responses",
+      // Non-secret placeholder to satisfy pi's "apiKey required" schema rule for
+      // custom providers; the real key is injected at runtime via setRuntimeApiKey.
+      apiKey: "runtime-override-not-used",
       models: [
         {
           id: foundryOpenAIModel,
@@ -196,25 +228,12 @@ export function createPiSdkAdapter({
       sessionManager,
     });
 
-    let text = "";
-    let agentEndMessages;
+    const state = { text: "", agentEndMessages: undefined };
     let timedOut = false;
 
-    const unsubscribe = session.subscribe((event) => {
-      if (event.type === "message_update") {
-        const update = event.assistantMessageEvent;
-        if (update?.type === "text_delta" && typeof update.delta === "string") {
-          text += update.delta;
-          options.onTextDelta?.(update.delta);
-        } else if (update?.type === "error") {
-          // Transient stream hiccup; pi auto-retries. Final outcome is the
-          // assistant stopReason on agent_end, checked after the turn settles.
-          log("warning", "pi_stream_error", { message: update.errorMessage ?? update.reason ?? "unknown" });
-        }
-      } else if (event.type === "agent_end") {
-        agentEndMessages = event.messages;
-      }
-    });
+    const unsubscribe = session.subscribe((event) =>
+      reducePiStreamEvent(state, event, { onTextDelta: options.onTextDelta, log }),
+    );
 
     const timer = requestTimeoutMs
       ? setTimeout(() => {
@@ -236,12 +255,12 @@ export function createPiSdkAdapter({
     if (timedOut) {
       throw new HttpError(504, `pi request timed out after ${requestTimeoutMs}ms`);
     }
-    const agentError = extractAgentEndError(agentEndMessages);
+    const agentError = extractAgentEndError(state.agentEndMessages);
     if (agentError) {
       throw new HttpError(502, agentError);
     }
     return {
-      text: text.length > 0 ? text : extractFallbackText(agentEndMessages),
+      text: state.text.length > 0 ? state.text : extractFallbackText(state.agentEndMessages),
       sessionId: options.sessionId,
       mock: false,
     };

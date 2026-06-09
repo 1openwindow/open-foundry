@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createAdapter, SUPPORTED_HARNESSES } from "../src/adapters/index.mjs";
+import { reducePiStreamEvent } from "../src/adapters/pi-sdk.mjs";
 
 class HttpError extends Error {
   constructor(statusCode, message) {
@@ -61,5 +62,48 @@ describe("createAdapter", () => {
     assert.equal(result.text, "mock response: hello");
     assert.equal(result.mock, true);
     await adapter.dispose();
+  });
+});
+
+describe("reducePiStreamEvent", () => {
+  const textDelta = (delta) => ({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta } });
+  const agentEnd = (messages, willRetry = false) => ({ type: "agent_end", messages, willRetry });
+
+  it("accumulates text_delta and forwards each delta to onTextDelta", () => {
+    const state = { text: "", agentEndMessages: undefined };
+    const streamed = [];
+    reducePiStreamEvent(state, textDelta("Hello"), { onTextDelta: (d) => streamed.push(d) });
+    reducePiStreamEvent(state, textDelta(" world"), { onTextDelta: (d) => streamed.push(d) });
+    assert.equal(state.text, "Hello world");
+    assert.deepEqual(streamed, ["Hello", " world"]);
+  });
+
+  it("records the final agent_end messages", () => {
+    const state = { text: "", agentEndMessages: undefined };
+    const messages = [{ role: "assistant", content: [{ type: "text", text: "done" }] }];
+    reducePiStreamEvent(state, agentEnd(messages));
+    assert.equal(state.agentEndMessages, messages);
+  });
+
+  it("drops partial text from a failed attempt when agent_end signals a retry", () => {
+    const state = { text: "", agentEndMessages: undefined };
+    reducePiStreamEvent(state, textDelta("partial broken"));
+    reducePiStreamEvent(state, agentEnd([{ role: "assistant", stopReason: "error", errorMessage: "boom" }], true));
+    assert.equal(state.text, "", "text from the failed attempt must be discarded before the retry");
+    reducePiStreamEvent(state, textDelta("clean answer"));
+    reducePiStreamEvent(state, agentEnd([{ role: "assistant", content: [{ type: "text", text: "clean answer" }] }]));
+    assert.equal(state.text, "clean answer");
+  });
+
+  it("logs the real errorMessage (not the reason enum) on a stream error event", () => {
+    const state = { text: "", agentEndMessages: undefined };
+    const logs = [];
+    reducePiStreamEvent(
+      state,
+      { type: "message_update", assistantMessageEvent: { type: "error", reason: "error", errorMessage: "rate limited" } },
+      { log: (level, code, meta) => logs.push({ level, code, meta }) },
+    );
+    assert.equal(logs.length, 1);
+    assert.equal(logs[0].meta.message, "rate limited");
   });
 });
