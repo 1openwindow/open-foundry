@@ -209,7 +209,7 @@ export function createPiSdkAdapter({
         } else if (update?.type === "error") {
           // Transient stream hiccup; pi auto-retries. Final outcome is the
           // assistant stopReason on agent_end, checked after the turn settles.
-          log("warning", "pi_stream_error", { message: update.error ?? update.reason ?? "unknown" });
+          log("warning", "pi_stream_error", { message: update.errorMessage ?? update.reason ?? "unknown" });
         }
       } else if (event.type === "agent_end") {
         agentEndMessages = event.messages;
