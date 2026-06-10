@@ -183,12 +183,4 @@ describe("validateRuntimeEnv", () => {
     assert.equal(authErrors.length, 1);
     assert.ok(issues.some((i) => i.severity === "error" && i.name === "OF_OPENAI_API_KEY"));
   });
-
-  it("rejects an invalid OPENCODE_PROVIDER_TYPE only under the opencode harness", () => {
-    const base = { OF_OPENAI_API_KEY: "sk-x", OF_OPENAI_BASE_URL: "https://x", OF_OPENAI_MODEL: "gpt-4.1-mini" };
-    const oc = validateRuntimeEnv({ HARNESS: "opencode", OPENCODE_PROVIDER_TYPE: "anthropic", ...base }, { mock: false });
-    assert.ok(oc.some((i) => i.severity === "error" && i.name === "OPENCODE_PROVIDER_TYPE"));
-    const pi = validateRuntimeEnv({ OPENCODE_PROVIDER_TYPE: "anthropic", ...base }, { mock: false });
-    assert.equal(pi.filter((i) => i.name === "OPENCODE_PROVIDER_TYPE").length, 0);
-  });
 });

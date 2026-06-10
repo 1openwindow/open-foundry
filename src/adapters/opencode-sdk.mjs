@@ -42,34 +42,22 @@ export function createOpencodeSdkAdapter({
   // server's default primary agent (build).
   const agent = (process.env.OPENCODE_AGENT ?? "").trim() || undefined;
 
-  // Azure's openai-compatible base_url expects the resource ".../openai" root
-  // with the api-version supplied as a query param; pi-style base URLs often
-  // carry an extra /v1 (or /openai/v1), so normalize back to ".../openai".
-  function normalizeAzureBaseUrl(raw) {
-    const root = raw
-      .replace(/\/+$/, "")
-      .replace(/\/openai\/v1$/i, "")
-      .replace(/\/openai$/i, "")
-      .replace(/\/v1$/i, "");
-    return `${root}/openai`;
-  }
-
   // Build the OpenCode config object that registers the Foundry-backed provider.
-  // Both branches use the bundled @ai-sdk/openai-compatible SDK so nothing is
-  // installed at runtime; azure only differs by base URL shape + api-version.
+  // The Foundry OF_OPENAI_BASE_URL is already an OpenAI-compatible endpoint (the
+  // same triple pi/codex use), so we point the bundled @ai-sdk/openai provider at
+  // it as-is — no Azure path rewriting. @ai-sdk/openai drives the /responses API
+  // and maps reasoning params correctly (e.g. gpt-5.x needs max_completion_tokens,
+  // which the generic openai-compatible SDK gets wrong). Azure's /openai/v1
+  // endpoint rejects a dated api-version, so we omit it unless explicitly set.
   function buildConfig() {
-    const explicitType = (process.env.OPENCODE_PROVIDER_TYPE ?? "").trim().toLowerCase();
-    const type = explicitType || (/\.azure\.com|azure/i.test(foundryOpenAIBaseUrl) ? "azure" : "openai");
-    const isAzure = type === "azure";
-    const baseURL = isAzure
-      ? normalizeAzureBaseUrl(foundryOpenAIBaseUrl)
-      : foundryOpenAIBaseUrl.replace(/\/+$/, "");
-    const apiVersion = (process.env.OPENCODE_API_VERSION ?? "2025-04-01-preview").trim();
+    const npm = (process.env.OPENCODE_PROVIDER_NPM ?? "@ai-sdk/openai").trim() || "@ai-sdk/openai";
+    const baseURL = foundryOpenAIBaseUrl.replace(/\/+$/, "");
+    const apiVersion = (process.env.OPENCODE_API_VERSION ?? "").trim();
 
     const options = {
       baseURL,
       apiKey: process.env.OF_OPENAI_API_KEY,
-      ...(isAzure ? { queryParams: { "api-version": apiVersion } } : {}),
+      ...(apiVersion ? { queryParams: { "api-version": apiVersion } } : {}),
     };
 
     const config = {
@@ -78,7 +66,7 @@ export function createOpencodeSdkAdapter({
       permission: { edit: "allow", bash: "allow", webfetch: "allow" },
       provider: {
         [providerId]: {
-          npm: "@ai-sdk/openai-compatible",
+          npm,
           name: "Foundry",
           options,
           models: {
@@ -87,7 +75,7 @@ export function createOpencodeSdkAdapter({
         },
       },
     };
-    return { config, summary: { type, baseURL, apiVersion: isAzure ? apiVersion : undefined } };
+    return { config, summary: { npm, baseURL, apiVersion: apiVersion || undefined } };
   }
 
   async function init() {
@@ -131,7 +119,7 @@ export function createOpencodeSdkAdapter({
     client = createOpencodeClient({ baseUrl: server.url });
     log("info", "opencode_provider_configured", {
       provider: providerId,
-      type: summary.type,
+      npm: summary.npm,
       baseUrl: summary.baseURL,
       model: foundryOpenAIModel,
       serverUrl: server.url,
@@ -179,10 +167,12 @@ export function createOpencodeSdkAdapter({
       .join("");
   }
 
-  async function ensureSession(piSessionDir) {
+  async function ensureSession(piSessionDir, cwd) {
     const existing = await readSessionId(piSessionDir);
     if (existing) return existing;
-    const created = unwrap(await client.session.create({ body: { title: "foundry" } }));
+    // Bind the session to the workspace directory so OpenCode loads its project
+    // context (AGENTS.md, .opencode/) from there, not the server's /app cwd.
+    const created = unwrap(await client.session.create({ query: { directory: cwd }, body: { title: "foundry" } }));
     const id = created?.id;
     if (!id) throw new HttpError(502, "OpenCode session.create returned no id");
     await writeSessionId(piSessionDir, id);
@@ -197,26 +187,27 @@ export function createOpencodeSdkAdapter({
       throw new HttpError(502, "OpenCode server is not configured; OF_OPENAI_BASE_URL/OF_OPENAI_MODEL must be set");
     }
 
-    const opencodeSessionId = await ensureSession(options.piSessionDir);
+    const opencodeSessionId = await ensureSession(options.piSessionDir, options.cwd);
 
-    // Stream tokens by subscribing to the server event bus and filtering deltas
-    // for this session's parts. The subscription is torn down once the turn ends.
+    // Stream tokens by subscribing to the server event bus and filtering text
+    // deltas for this session. The subscription is torn down once the turn ends.
     const controller = new AbortController();
     let streamed = "";
     const streamDone = (async () => {
       try {
         // event.subscribe returns the SSE result ({ stream }) directly, not the
-        // { data, error } envelope the other methods use.
+        // { data, error } envelope the other methods use. Token deltas arrive as
+        // `message.part.delta` events (field=text); `message.part.updated`
+        // carries only the cumulative part, not incremental deltas.
         const events = await client.event.subscribe({ signal: controller.signal });
         for await (const event of events.stream) {
           if (controller.signal.aborted) break;
-          if (event?.type !== "message.part.updated") continue;
-          const part = event.properties?.part;
-          const delta = event.properties?.delta;
-          if (part?.sessionID !== opencodeSessionId) continue;
-          if (part?.type === "text" && typeof delta === "string" && delta.length > 0) {
-            streamed += delta;
-            options.onTextDelta?.(delta);
+          if (event?.type !== "message.part.delta") continue;
+          const props = event.properties;
+          if (props?.sessionID !== opencodeSessionId) continue;
+          if (props.field === "text" && typeof props.delta === "string" && props.delta.length > 0) {
+            streamed += props.delta;
+            options.onTextDelta?.(props.delta);
           }
         }
       } catch {

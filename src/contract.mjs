@@ -82,8 +82,8 @@ export const contract = {
       { name: "CODEX_PROVIDER_TYPE", default: "(auto)", accepts: ["azure", "openai"], note: "HARNESS=codex BYOK provider type. Auto-detected from OF_OPENAI_BASE_URL (azure when the host is *.azure.com)." },
       { name: "CODEX_WIRE_API", default: "responses", accepts: ["responses", "chat"], note: "HARNESS=codex provider wire API format." },
       { name: "CODEX_API_VERSION", default: "2025-04-01-preview", note: "HARNESS=codex Azure provider api-version." },
-      { name: "OPENCODE_PROVIDER_TYPE", default: "(auto)", accepts: ["azure", "openai"], note: "HARNESS=opencode BYOK provider type. Auto-detected from OF_OPENAI_BASE_URL (azure when the host is *.azure.com); both use the bundled @ai-sdk/openai-compatible SDK." },
-      { name: "OPENCODE_API_VERSION", default: "2025-04-01-preview", note: "HARNESS=opencode Azure provider api-version (sent as the api-version query param)." },
+      { name: "OPENCODE_PROVIDER_NPM", default: "@ai-sdk/openai", note: "HARNESS=opencode model provider SDK (bundled into the opencode binary). Default @ai-sdk/openai drives the /responses API and maps reasoning params (gpt-5.x) correctly; set @ai-sdk/openai-compatible for plain chat/completions gateways." },
+      { name: "OPENCODE_API_VERSION", default: "(unset)", note: "HARNESS=opencode optional api-version query param. Leave unset for Foundry's /openai/v1 endpoint (which rejects a dated version); set only for classic Azure deployment-style endpoints." },
       { name: "OPENCODE_AGENT", default: "(server default)", note: "HARNESS=opencode agent to run session.prompt under; empty uses OpenCode's default primary agent (build)." },
       { name: "REQUEST_TIMEOUT_MS", default: "300000" },
       { name: "SSE_HEARTBEAT_MS", default: "20000", note: "SSE keepalive interval; emits a `:` comment so Foundry's ~120s APIM idle timeout never fires during silent phases. 0 disables." },
@@ -127,7 +127,6 @@ export function validateRuntimeEnv(env, { mock } = {}) {
   const knobsByHarness = {
     copilot: ["COPILOT_PROVIDER_TYPE", "COPILOT_WIRE_API"],
     codex: ["CODEX_PROVIDER_TYPE", "CODEX_WIRE_API"],
-    opencode: ["OPENCODE_PROVIDER_TYPE"],
   };
   for (const name of knobsByHarness[harness] ?? []) {
     const value = String(env[name] ?? "").trim().toLowerCase();
