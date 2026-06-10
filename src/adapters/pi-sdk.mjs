@@ -1,26 +1,14 @@
 import { resolve } from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 
-// pi harness adapter (HARNESS=pi, the default).
-//
-// Drives pi-coding-agent in-process through its public SDK (createAgentSession),
-// mirroring the codex/copilot SDK adapters — no `pi --mode rpc` subprocess and no
-// PI_ARGS. The Foundry/Azure OpenAI model is reached by registering a custom
-// "foundry" provider in models.json (api: openai-responses, baseUrl from
-// OF_OPENAI_BASE_URL) and supplying the key as a runtime override on AuthStorage
-// (apikey mode) or a freshly minted AAD bearer per turn (managed-identity mode).
-//
-// Foundry's per-invocation sessionId maps onto a pi session dir: SessionManager
-// .continueRecent(cwd, piSessionDir) continues the most recent conversation in
-// that dir (or starts one), preserving state across turns — the SDK equivalent of
-// the old `pi --continue --session-dir <dir>`.
-//
-// The in-process AgentSession emits the same events the RPC transport serialized
-// (message_update/text_delta, agent_end with messages), so streaming is real and
-// token-granular: each text_delta is forwarded to onTextDelta as it arrives.
-// Pure reducer for the AgentSession event stream. Folds streaming events into
-// { text, agentEndMessages }. Exported so the event handling can be unit-tested
-// without a live pi session (the SDK path is otherwise unreachable under mock).
+// pi harness adapter (HARNESS=pi, the default). Drives pi-coding-agent in-process
+// via its SDK (createAgentSession), like the codex/copilot adapters — no `pi --mode
+// rpc` subprocess, no PI_ARGS. The Foundry model is a custom "foundry" provider in
+// models.json; the key is a runtime override on AuthStorage (apikey) or a per-turn
+// AAD bearer (managed-identity).
+
+// Folds AgentSession stream events into { text, agentEndMessages }. Exported so the
+// event handling is unit-testable (the SDK path is unreachable under mock).
 export function reducePiStreamEvent(state, event, { onTextDelta, log } = {}) {
   if (event?.type === "message_update") {
     const update = event.assistantMessageEvent;
@@ -28,17 +16,13 @@ export function reducePiStreamEvent(state, event, { onTextDelta, log } = {}) {
       state.text += update.delta;
       onTextDelta?.(update.delta);
     } else if (update?.type === "error") {
-      // Transient stream hiccup; pi auto-retries. Final outcome is the assistant
-      // stopReason on agent_end, checked after the turn settles.
+      // Non-fatal: pi retries. Final outcome comes from agent_end stopReason.
       log?.("warning", "pi_stream_error", { message: update.errorMessage ?? update.reason ?? "unknown" });
     }
   } else if (event?.type === "agent_end") {
     state.agentEndMessages = event.messages;
-    if (event.willRetry) {
-      // Failed attempt; pi retries from scratch and re-streams the next attempt's
-      // text. Drop the partial so the result reflects only the final attempt.
-      state.text = "";
-    }
+    // pi retries from scratch; drop the failed attempt's partial text.
+    if (event.willRetry) state.text = "";
   }
   return state;
 }
@@ -128,15 +112,10 @@ export function createPiSdkAdapter({
     ({ createAgentSession, AuthStorage, ModelRegistry, SessionManager } = sdk);
   }
 
-  // Register the Foundry-backed model as a custom provider in models.json, then
-  // build the AuthStorage + ModelRegistry the per-turn sessions reuse. The real API
-  // key is never written to models.json; it is supplied as a runtime override
-  // (apikey) or minted per turn (managed-identity) so nothing secret touches disk.
-  //
-  // pi's models.json schema requires a non-empty `apiKey` on any custom provider that
-  // defines models, or the whole file fails to load and `find()` returns undefined.
-  // We satisfy it with a non-secret placeholder; AuthStorage.setRuntimeApiKey takes
-  // priority over it at request time, so the placeholder is never actually used.
+  // Register the Foundry model as a custom provider, then build the AuthStorage +
+  // ModelRegistry reused per turn. pi rejects a custom provider that defines models
+  // unless it carries a non-empty apiKey, so we write a placeholder; the real key is
+  // supplied via setRuntimeApiKey (runtime override), which wins and never hits disk.
   async function configureModelProvider() {
     if (isMock) return;
     if (!foundryOpenAIBaseUrl || !foundryOpenAIModel) return;
@@ -153,9 +132,7 @@ export function createPiSdkAdapter({
     providers.foundry = {
       baseUrl: foundryOpenAIBaseUrl,
       api: "openai-responses",
-      // Non-secret placeholder to satisfy pi's "apiKey required" schema rule for
-      // custom providers; the real key is injected at runtime via setRuntimeApiKey.
-      apiKey: "runtime-override-not-used",
+      apiKey: "runtime-override-not-used", // placeholder; real key set via setRuntimeApiKey
       models: [
         {
           id: foundryOpenAIModel,
