@@ -26,7 +26,7 @@ You also need:
 
 - a Foundry project (subscription, location, project endpoint),
 - an Azure Container Registry your Foundry project can pull from (see [Container registry](#container-registry) to set one up),
-- a runtime image you can pull as the build base (see [docs/runtime-image.md](./docs/runtime-image.md)): `pi-foundry-runtime` (Pi), `ghcp-foundry-runtime` (GitHub Copilot), or `codex-foundry-runtime` (OpenAI Codex),
+- a runtime image you can pull as the build base (see [docs/runtime-image.md](./docs/runtime-image.md)): `pi-foundry-runtime` (Pi), `ghcp-foundry-runtime` (GitHub Copilot), `codex-foundry-runtime` (OpenAI Codex), or `opencode-foundry-runtime` (OpenCode),
 - a Foundry OpenAI-compatible endpoint, model name, and an API key (`OF_MODEL_AUTH=apikey`, default). The Pi runtime also supports a managed-identity data-plane role assignment on the model resource (`OF_MODEL_AUTH=managed-identity`, keyless); the GitHub Copilot and OpenAI Codex runtimes do not.
 
 The runtime image name is the harness selector. Do not set a separate `HARNESS` azd env value for normal deployments.

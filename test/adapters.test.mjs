@@ -23,7 +23,7 @@ const baseCtx = {
 
 describe("createAdapter", () => {
   it("exposes the supported harnesses", () => {
-    assert.deepEqual(SUPPORTED_HARNESSES, ["pi", "copilot", "codex"]);
+    assert.deepEqual(SUPPORTED_HARNESSES, ["pi", "copilot", "codex", "opencode"]);
   });
 
   it("throws on an unknown harness", () => {
@@ -56,6 +56,16 @@ describe("createAdapter", () => {
 
   it("codex adapter returns mock text without starting the CLI", async () => {
     const adapter = createAdapter("codex", baseCtx);
+    await adapter.init();
+    await adapter.configureModelProvider();
+    const result = await adapter.invoke("hello", { sessionId: "s1", cwd: "/tmp", piSessionDir: "/tmp/open-foundry-test/state/sessions/s1/pi-sessions" });
+    assert.equal(result.text, "mock response: hello");
+    assert.equal(result.mock, true);
+    await adapter.dispose();
+  });
+
+  it("opencode adapter returns mock text without starting the server", async () => {
+    const adapter = createAdapter("opencode", baseCtx);
     await adapter.init();
     await adapter.configureModelProvider();
     const result = await adapter.invoke("hello", { sessionId: "s1", cwd: "/tmp", piSessionDir: "/tmp/open-foundry-test/state/sessions/s1/pi-sessions" });

@@ -21,6 +21,7 @@ Runtime image names are the harness selector:
 | `pi-foundry-runtime:<tag>` | Pi | Includes `@earendil-works/pi-coding-agent`; supports API key or managed identity model auth. |
 | `ghcp-foundry-runtime:<tag>` | GitHub Copilot | Includes `@github/copilot-sdk`; Copilot BYOK is API-key only. |
 | `codex-foundry-runtime:<tag>` | OpenAI Codex | Includes `@openai/codex-sdk`; Codex BYOK is API-key only. |
+| `opencode-foundry-runtime:<tag>` | OpenCode | Includes the `opencode` CLI + `@opencode-ai/sdk`; OpenCode BYOK is API-key only. |
 
 Your repo stays the source of truth. No private framework directory is
 installed. If you stop using open-foundry you delete 5 files and you're out.
@@ -31,7 +32,7 @@ your-agent-repo/
   Dockerfile, azure.yaml, agent.yaml, agent.manifest.yaml, .dockerignore   ← added
                        │
                        ▼
-             pi-foundry-runtime:<tag>, ghcp-foundry-runtime:<tag>, or codex-foundry-runtime:<tag>
+              pi-foundry-runtime:<tag>, ghcp-foundry-runtime:<tag>, codex-foundry-runtime:<tag>, or opencode-foundry-runtime:<tag>
                        │
                        ▼
          Microsoft Foundry Hosted Agents
@@ -125,6 +126,24 @@ node $SKILL/scripts/verify.mjs
 Do not use `--model-auth managed-identity` with `codex-foundry-runtime`; Codex
 BYOK is API-key only, same as the Copilot runtime.
 
+### OpenCode Runtime
+
+To run the same Hosted Agent bridge with OpenCode instead of the Pi example above, bootstrap
+with an `opencode-foundry-runtime` image:
+
+```bash
+IMAGE=ghcr.io/1openwindow/opencode-foundry-runtime:<tag>
+
+node $SKILL/scripts/bootstrap.mjs     --agent-name <name> --runtime-image $IMAGE
+node $SKILL/scripts/configure-env.mjs --env-name <env> --agent-name <name> --model <model> --base-url <url> --api-key-env OF_OPENAI_API_KEY \
+                                      --acr <acr>.azurecr.io --foundry-project-endpoint <url> --azure-subscription-id <sub> --azure-location <region>
+azd deploy
+node $SKILL/scripts/verify.mjs
+```
+
+Do not use `--model-auth managed-identity` with `opencode-foundry-runtime`;
+OpenCode BYOK is API-key only, same as the Copilot and Codex runtimes.
+
 ## Sample agent repos
 
 Ready-made repos to try a deploy end-to-end:
@@ -132,6 +151,7 @@ Ready-made repos to try a deploy end-to-end:
 - [of-pi-agent](https://github.com/1openwindow/of-pi-agent) — minimal Pi agent (`pi-foundry-runtime`).
 - [of-ghcp-agent](https://github.com/1openwindow/of-ghcp-agent) — minimal GitHub Copilot agent (`ghcp-foundry-runtime`).
 - [of-codex-agent](https://github.com/1openwindow/of-codex-agent) — minimal OpenAI Codex agent (`codex-foundry-runtime`).
+- [of-opencode-agent](https://github.com/1openwindow/of-opencode-agent) — minimal OpenCode agent (`opencode-foundry-runtime`).
 
 ## Runtime contract
 
@@ -144,7 +164,7 @@ from it via `npm run emit:contract`.
 | `OF_OPENAI_API_KEY` / `OF_OPENAI_BASE_URL` / `OF_OPENAI_MODEL` | live (`OF_MOCK!=1`) | OpenAI-compatible triple |
 | `OF_MOCK` | optional | `1` = run without a real model (smoke) |
 | `OF_MODEL_AUTH` | optional | `apikey` (default) or `managed-identity` (keyless); apikey-only on the copilot and codex harnesses |
-| `HARNESS` | baked into runtime image | `pi`, `copilot`, or `codex`; do not set in `azd` env for normal deployments |
+| `HARNESS` | baked into runtime image | `pi`, `copilot`, `codex`, or `opencode`; do not set in `azd` env for normal deployments |
 
 Reserved (Foundry-owned, do not redefine): `AGENT_*`, `FOUNDRY_*`
 (exception: `FOUNDRY_PROJECT_ENDPOINT`).
@@ -161,7 +181,7 @@ open-foundry doctor     # exit 1 + JSON report when required env is missing
 
 ```
 src/                            invocations host, contract SoT, in-container CLI
-Dockerfile.runtime              builds pi-foundry-runtime, ghcp-foundry-runtime, or codex-foundry-runtime
+Dockerfile.runtime              builds pi-foundry-runtime, ghcp-foundry-runtime, codex-foundry-runtime, or opencode-foundry-runtime
 .agents/skills/open-foundry/      the skill (SKILL.md + templates + scripts)
 scripts/                        runtime build/smoke, emit:contract
 test/                           npm test (node --test)

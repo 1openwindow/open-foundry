@@ -47,6 +47,12 @@ export const contract = {
       runtimeImage: "ghcr.io/1openwindow/codex-foundry-runtime:0.1",
       modelAuth: ["apikey"],
     },
+    {
+      harness: "opencode",
+      imagePrefix: "opencode-foundry-runtime",
+      runtimeImage: "ghcr.io/1openwindow/opencode-foundry-runtime:0.1",
+      modelAuth: ["apikey"],
+    },
   ],
   env: {
     reservedPrefixes: ["AGENT_", "FOUNDRY_"],
@@ -66,7 +72,7 @@ export const contract = {
     requiredWhenLiveKeyless: ["OF_OPENAI_BASE_URL", "OF_OPENAI_MODEL"],
     // Optional runtime knobs with their defaults / accepted shapes.
     runtime: [
-      { name: "HARNESS", default: "pi", accepts: ["pi", "copilot", "codex"], note: "Agent harness. pi drives pi-coding-agent via its in-process SDK; copilot drives GitHub Copilot via @github/copilot-sdk; codex drives OpenAI Codex via @openai/codex-sdk. copilot/codex reach the model through BYOK (apikey only)." },
+      { name: "HARNESS", default: "pi", accepts: ["pi", "copilot", "codex", "opencode"], note: "Agent harness. pi drives pi-coding-agent via its in-process SDK; copilot drives GitHub Copilot via @github/copilot-sdk; codex drives OpenAI Codex via @openai/codex-sdk; opencode drives OpenCode via @opencode-ai/sdk. copilot/codex/opencode reach the model through BYOK (apikey only)." },
       { name: "OF_MOCK", default: "0", accepts: ["0", "1", "true", "false"] },
       { name: "OF_MODEL_AUTH", default: "apikey", accepts: ["apikey", "managed-identity"], note: "managed-identity mints AAD bearer tokens via DefaultAzureCredential; no OF_OPENAI_API_KEY needed. Not supported on API-key-only harnesses (copilot, codex)." },
       { name: "FOUNDRY_TOKEN_SCOPE", default: "https://cognitiveservices.azure.com/.default", note: "AAD scope used when OF_MODEL_AUTH=managed-identity." },
@@ -76,6 +82,9 @@ export const contract = {
       { name: "CODEX_PROVIDER_TYPE", default: "(auto)", accepts: ["azure", "openai"], note: "HARNESS=codex BYOK provider type. Auto-detected from OF_OPENAI_BASE_URL (azure when the host is *.azure.com)." },
       { name: "CODEX_WIRE_API", default: "responses", accepts: ["responses", "chat"], note: "HARNESS=codex provider wire API format." },
       { name: "CODEX_API_VERSION", default: "2025-04-01-preview", note: "HARNESS=codex Azure provider api-version." },
+      { name: "OPENCODE_PROVIDER_TYPE", default: "(auto)", accepts: ["azure", "openai"], note: "HARNESS=opencode BYOK provider type. Auto-detected from OF_OPENAI_BASE_URL (azure when the host is *.azure.com); both use the bundled @ai-sdk/openai-compatible SDK." },
+      { name: "OPENCODE_API_VERSION", default: "2025-04-01-preview", note: "HARNESS=opencode Azure provider api-version (sent as the api-version query param)." },
+      { name: "OPENCODE_AGENT", default: "(server default)", note: "HARNESS=opencode agent to run session.prompt under; empty uses OpenCode's default primary agent (build)." },
       { name: "REQUEST_TIMEOUT_MS", default: "300000" },
       { name: "SSE_HEARTBEAT_MS", default: "20000", note: "SSE keepalive interval; emits a `:` comment so Foundry's ~120s APIM idle timeout never fires during silent phases. 0 disables." },
       { name: "ENABLE_DIAGNOSTICS", default: "0", accepts: ["0", "1", "true", "false"] },
@@ -118,6 +127,7 @@ export function validateRuntimeEnv(env, { mock } = {}) {
   const knobsByHarness = {
     copilot: ["COPILOT_PROVIDER_TYPE", "COPILOT_WIRE_API"],
     codex: ["CODEX_PROVIDER_TYPE", "CODEX_WIRE_API"],
+    opencode: ["OPENCODE_PROVIDER_TYPE"],
   };
   for (const name of knobsByHarness[harness] ?? []) {
     const value = String(env[name] ?? "").trim().toLowerCase();

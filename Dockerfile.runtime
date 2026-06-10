@@ -5,6 +5,7 @@
 #   --target pi       -> pi-coding-agent     (image: pi-foundry-runtime,   ~655MB)
 #   --target copilot  -> @github/copilot-sdk  (image: ghcp-foundry-runtime, ~1.75GB)
 #   --target codex    -> @openai/codex-sdk    (image: codex-foundry-runtime)
+#   --target opencode -> opencode-ai CLI + sdk (image: opencode-foundry-runtime)
 # Adding a harness = add one `FROM base AS <name>` stage below (+ its adapter in
 # src/adapters and a case in src/adapters/index.mjs).
 
@@ -61,3 +62,15 @@ RUN npm install --no-save @github/copilot-sdk@1.0.0-beta.12
 FROM base AS codex
 ENV HARNESS=codex
 RUN npm install --no-save @openai/codex-sdk@0.138.0
+
+# --- opencode harness -------------------------------------------------------
+# OpenCode CLI + SDK runtime, loaded lazily by src/adapters/opencode-sdk.mjs.
+# opencode-ai ships the `opencode` binary (the SDK spawns `opencode serve`);
+# @opencode-ai/sdk drives it over HTTP. The openai-compatible/azure model
+# providers are bundled into the opencode binary, so no provider npm is
+# downloaded at runtime.
+FROM base AS opencode
+ENV HARNESS=opencode \
+    OPENCODE_DISABLE_AUTOUPDATE=1 \
+    PATH=/app/node_modules/.bin:$PATH
+RUN npm install --no-save opencode-ai@1.17.0 @opencode-ai/sdk@1.15.11

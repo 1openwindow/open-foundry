@@ -7,6 +7,7 @@ name: runtime-image
 #   target pi       ->  ghcr.io/<owner>/pi-foundry-runtime:<tag>
 #   target copilot  ->  ghcr.io/<owner>/ghcp-foundry-runtime:<tag>
 #   target codex    ->  ghcr.io/<owner>/codex-foundry-runtime:<tag>
+#   target opencode ->  ghcr.io/<owner>/opencode-foundry-runtime:<tag>
 #
 # Two phases make publishing all-or-nothing:
 #   build   — builds every harness with push:false (fail-fast off, so every
@@ -25,7 +26,8 @@ name: runtime-image
 #   Settings → Actions → General → Workflow permissions = Read and write
 #   (or rely on the explicit `permissions:` block below — which we use).
 #   Confirm each GHCR package (pi-foundry-runtime, ghcp-foundry-runtime,
-#   codex-foundry-runtime) is public the first time it is published.
+#   codex-foundry-runtime, opencode-foundry-runtime) is public the first time it
+#   is published.
 
 on:
   push:
@@ -46,7 +48,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [pi, copilot, codex]
+        target: [pi, copilot, codex, opencode]
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -75,6 +77,8 @@ jobs:
             image: ghcp-foundry-runtime
           - target: codex
             image: codex-foundry-runtime
+          - target: opencode
+            image: opencode-foundry-runtime
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
     steps:

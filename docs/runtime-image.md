@@ -14,6 +14,7 @@ to put in `azd` env, `agent.yaml`, or `agent.manifest.yaml`.
 | `pi-foundry-runtime:<tag>` | `pi` | pi-coding-agent + pi adapter | API key or managed identity |
 | `ghcp-foundry-runtime:<tag>` | `copilot` | GitHub Copilot SDK + Copilot adapter | API key only |
 | `codex-foundry-runtime:<tag>` | `codex` | OpenAI Codex SDK + Codex adapter | API key only |
+| `opencode-foundry-runtime:<tag>` | `opencode` | OpenCode CLI + SDK + OpenCode adapter | API key only |
 
 The skill's `bootstrap.mjs` writes a thin Dockerfile in your repo that pulls the
 image you choose:
@@ -141,6 +142,9 @@ docker push ghcr.io/<org>/ghcp-foundry-runtime:<tag>
 
 OPEN_FOUNDRY_RUNTIME_TARGET=codex OPEN_FOUNDRY_RUNTIME_IMAGE=ghcr.io/<org>/codex-foundry-runtime:<tag> npm run runtime:build
 docker push ghcr.io/<org>/codex-foundry-runtime:<tag>
+
+OPEN_FOUNDRY_RUNTIME_TARGET=opencode OPEN_FOUNDRY_RUNTIME_IMAGE=ghcr.io/<org>/opencode-foundry-runtime:<tag> npm run runtime:build
+docker push ghcr.io/<org>/opencode-foundry-runtime:<tag>
 ```
 
 For `azd deploy` ACR remote builds, the registry holding the image must be one
@@ -155,6 +159,7 @@ tag:
 - `ghcr.io/<owner>/pi-foundry-runtime`
 - `ghcr.io/<owner>/ghcp-foundry-runtime`
 - `ghcr.io/<owner>/codex-foundry-runtime`
+- `ghcr.io/<owner>/opencode-foundry-runtime`
 
 ```bash
 git tag v0.1.0
